@@ -1,0 +1,2234 @@
+---
+title: "Continuity of large-body size in the evolution of lamniform sharks"
+title-block-banner: "#2E2D29"
+title-block-banner-color: "#FFFFFF"
+subtitle: "Supplementary Data:"
+description: "Stanford Doer School of Sustainability, Paleobiology Lab"
+date: last-modified
+date-format: "YYYY-MM-DD"
+mainfont: Figtree
+sansfont: Georgia
+footnotes-hover: true
+reference-location: margin
+lang: en
+number-sections: false
+crossref:
+  chapters: true
+author:
+  - name: Mohamad Bazzi
+    orcid: 0000-0002-9495-0781
+    email: bazzi@stanford.edu
+    url: https://github.com/mohabazzi
+    affiliations:
+      - name: Stanford University
+        department: Department of Earth and Planetary Sciences
+        address: CA 94305
+        country: USA
+        url: https://sustainability.stanford.edu/
+highlight-style: pygments
+fig-cap-location: top
+lightbox: auto
+format:
+  stanford-quarto-html: default
+other-links:
+  - text: Custom Quarto Template
+    icon: file-code
+    href: https://github.com/mohabazzi/stanford-quarto
+code-links:
+  - text: Github Repo
+    icon: github
+    href: https://github.com/mohabazzi/AptianShark
+bibliography: references.bib
+editor_options: 
+  chunk_output_type: console
+---
+
+## Libraries
+
+```{r message=FALSE, results='hide',warning=FALSE}
+R.packages <- c("ozmaps ggpubr ggspatial dplyr openxlsx ggplot2 tidyr
+                 purrr readxl kableExtra knitr gtsummary gt MASS broom 
+                 smatr MASSTIMATE ggpmisc ggrepel smatr performance downloadthis
+                 rempsyc car forcats RRPP caper geiger phangorn lmtest 
+                 MuMIn phytools conflicted tibble irr nlme ggdist")
+
+import_packages <- 
+  function(x)
+  x |> trimws() |> strsplit("\\s+") |> unlist() |> 
+  lapply(function(x) library(x, character.only = T)) |> 
+  suppressMessages() |> 
+  suppressWarnings()
+
+R.packages |> import_packages()
+
+# Resolve conflicted functions.
+conflicted::conflict_prefer("map", "purrr")
+conflicted::conflict_prefer("filter", "dplyr")
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("summarize", "dplyr")
+conflicted::conflict_prefer("annotate", "ggplot2")
+conflicted::conflict_prefer("AICc", "MuMIn")
+```
+
+## Custom functions
+
+```{r}
+#' @title Averaging digitized measurements 
+#' @description This function returns a dataframe obtained by applying the Reduce function. 
+#' @return a dataframe.
+#' @details remove is given as an argument to filter the replicate column which is numeric and losses meaning after Reduce is applied. 
+
+numeric_details <- function(path = NULL, remove = NULL) {
+  sheets <- getSheetNames(file = path)
+  numeric_var <- lapply(sheets, function(x) {
+    df <- read.xlsx(xlsxFile = path, sheet = x)
+    df |> select(where(is.numeric))
+  }) 
+  names(numeric_var) <- sheets
+  # Compute the average.
+  numeric_details <- Reduce(f = "+",x = numeric_var)/length(numeric_var)
+  if (!is.null(remove)) {
+    numeric_details <- numeric_details |> select(-all_of(remove))
+  }
+  return(numeric_details)
+}
+
+other_details <- function(path = NULL) {
+  frame <- 
+    read.xlsx(xlsxFile = path, sheet = 1) |> 
+    # Bring species and sex. 
+    select(where(~ !is.numeric(.)))
+    return(frame)
+}
+
+#' @title Intraclass correlation coefficient
+#' @description 
+#' @return 
+#' @details 
+
+icc_custom <- function(path = NULL) {
+  sheet_names <- getSheetNames(path)
+  # List.
+  sheet_lists <- 
+    map(sheet_names, ~ read.xlsx(path, sheet = .x))
+  # Select variable.
+  sheet_lists <- 
+    map(sheet_lists, ~ .x |> select("centrum_diameter_cm","total_length_cm")) |> 
+    lapply(as.data.frame)
+  # Combine into master object.
+  combined <- do.call(cbind,sheet_lists)
+  
+  names(combined) <- make.unique(names(combined))
+  
+  centrum <- combined |> select(matches("^centrum"))
+  length  <- combined |> select(matches("length"))
+  
+  ls_obj  <- list(centrum,length)
+  names(ls_obj) <- c("Centrum","Length")
+  # Compute ICC.
+  irr_centrum <- irr::icc(ratings = ls_obj$Centrum)
+  irr_length  <- irr::icc(ratings = ls_obj$Length)
+  
+  irr_centrum_res <- 
+    cbind(irr_centrum$subjects,irr_centrum$raters,
+          irr_centrum$value,irr_centrum$r0,
+          irr_centrum$p.value) |>
+  as.data.frame() |> 
+  setNames(nm = c("subjects","raters","value","r0","p-value"))
+  
+  irr_length_res <- 
+    cbind(irr_length$subjects,irr_length$raters,
+          irr_length$value,irr_length$r0,
+          irr_length$p.value) |>
+  round(digits = 1) |> 
+  as.data.frame() |> 
+  setNames(nm = c("subjects","raters","value","r0","p-value"))
+  
+  # Combine results.
+  combin_res <- 
+    bind_rows(irr_centrum_res,irr_length_res) |> 
+    mutate(variable = c("Centrum","Total Length"))
+  
+  return(combin_res)
+}
+
+#'@title Confidence & Prediction Intervals
+
+intervals <-  function(xvar,alpha=0.975) {
+  mean<-mean(xvar)
+  std<-sd(xvar)
+  n<-length(xvar)
+  ci.s.x<-sqrt((std^2)/n)
+  pi.s.x<-std*sqrt(1+1/n)
+  t<-qt(alpha,df=n-1)
+  ci.uci<-mean+t*ci.s.x
+  ci.lci<-mean-t*ci.s.x
+  pi.uci<-mean+t*pi.s.x
+  pi.lci<-mean-t*pi.s.x
+  res<-as.list(c(round(mean,4),round(std,4),n,round(t,4),round(ci.lci,4),round(ci.uci,4),round(pi.lci,4),round(pi.uci,4)))
+  names(res)<-c('mean','st.dev','N','t.stat','Lower.CI','Upper.CI','Lower.PI','Upper.PI')
+  return(res)
+}
+```
+
+## Objectives and rationale
+
+Here we adopt an extant-scaling approach using ordinary least square regression modelling based on the total length (TL) and centrum diameter (CD) of modern lamniform species to **1)** explore the performance of centrum diameter as a proxy of body size; and **2)** generate body size predictions (total length and mass) in the hitherto largest described and geologically oldest giant lamniform shark on record.
+
+## Framework & methodology
+
+```{r warning=FALSE,message=FALSE,results='hide',echo=FALSE,fig.show='hide'}
+# Locality map.
+AU <- ozmaps::ozmap("states")
+```
+
+```{r warning=FALSE, message=FALSE,fig.cap="Geographic map of Casuarina Beach, Darwin, Northern Territory, Australia. The fossil locality is indicated by a red rectangle. The maps were generated programmatically using the ozmap and ggplot2 packages."}
+AuMap <- 
+  ggplot(data = AU) +
+  geom_sf(fill= "antiquewhite") +
+  annotate(geom = "rect",xmin = 130.5, xmax = 131.2, ymin = -12.7, ymax = -12.2, color = "#E16A86", fill = NA, lwd = .8) +
+  xlab("Longitude") + 
+  ylab("Latitude") +
+  theme_bw() + 
+  theme(panel.grid.major = element_line(color = gray(.5), linetype = "dashed", linewidth = 0.5), 
+        panel.background = element_rect(fill = "aliceblue"))
+
+# Casuarina Beach, Darwin, Northern Territory.
+ggarrange(AuMap,
+          AU |> 
+  filter(NAME == "Northern Territory") |> 
+  ggplot(aes(fill = NAME)) + 
+  geom_sf(fill = "antiquewhite",show.legend = F) +
+  labs(x= "Longitude", y = "Latitude") +
+  # Darwin.
+  geom_rect(aes(xmin = 130.5, xmax = 131.2, ymin = -12.7, ymax = -12.2), color = "#E16A86", fill = NA, lwd = .8) +
+  # Casuarina Beach
+  geom_point(aes(x = 130.873794555, y = -12.352499961), color = "black", size = 3,show.legend = F) +
+  geom_label(aes(x = 132, y = -13, label = "Casuarina Beach, Darwin"),color = "black", fontface = 2, fill = NA) +
+  annotation_scale(location = "bl", width_hint = 0.5) +
+  annotation_north_arrow(location = "bl", which_north = "true", pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"), 
+                         style = north_arrow_fancy_orienteering) +
+  theme_bw() + 
+  theme(plot.title = element_text(face = "bold"),
+        panel.grid.major = element_line(color = gray(.5), linetype = "dashed", linewidth = 0.5),
+        panel.background = element_rect(fill = "aliceblue")))
+```
+
+## Data sources {.smaller}
+
+### Data wrangling and feature engineering
+
+**Extant size data:** **\[1\]** Data on body length and mass, along with measurements of vertebral centra of white sharks (*Carcharodon carcharias*) off the east coast of South Africa [@Winter1999]. **\[2\]** Equivalent measurement data compiled from the literature of Lamnidae and Alopiidae species: *Isurus oxyrinchus*, *Lamna nasus*, and *Alopias pelagicus* [@Natanson2006; @Natanson2002; @Drew2015]. **\[3\]** Complementary data extracted from static images of scatter plots showing the relationship between centrum diameter/radius and body length (fork, precaudal, and total length) of *Pseudocarcharias kamoharai* [@Kindong2020], *Cetorhinus maximus* [@Natanson2008], *Lamna ditropis* [@Goldman2006], *Carcharias taurus* [@Lucifora2003], *A. pelagicus* [@Liu1999], *C. carcharias* [@Cailliet1985], *A. vulpinus* [@Cailliet1983], and *A. superciliosus* [@Liu1998]. **\[4\]** Single specimen measurements of *Odontaspis noronhai* [@Stone2019] and *O. ferox* [@Hansen2013]. **\[5\]** Vertebral centrum measurements, body size, sex, and vertebral count along the spinal column of captured male *C. carcharias* [@Natanson2018].
+
+**Fossil size data:** Literature-sourced data on body length and maximum vertebral centra from multiple Cretaceous lamniform species.
+
+**Input data:** Five Aptian-aged cardabiodontid shark vertebral centra of unknown body size.
+
+```{r}
+# Alopias pelagicus (references: Liu et al. 1999, fig.1 and Drew et al. 2015)
+alopias_pelagicus_liu <- 
+  cbind(
+    numeric_details(path = "data/Liu et al. 1999.xlsx",remove = "replicate"),
+    other_details(path = "data/Liu et al. 1999.xlsx")
+  ) |>
+  relocate("species",.before = 1)
+
+alopias_pelagicus_drew <- 
+  cbind(
+    numeric_details(path = "data/Drew et al. 2015.xlsx"),
+    other_details(path = "data/Drew et al. 2015.xlsx")
+  ) |> 
+  relocate(c("order","family","genus","species"),.before = 1)
+
+# Combine the two sources.
+alopias_pelagicus_data <- 
+  bind_rows(
+    alopias_pelagicus_liu |>
+      select(any_of(c("order","family","genus","species","centrum_diameter_cm","total_length_cm","reference"))),
+    alopias_pelagicus_drew |> 
+      select(any_of(c("order","family","genus","species","centrum_diameter_cm","total_length_cm","reference")))
+  )
+
+# Alopias superciliosus (reference: Liu et al. 1998).
+alopias_superciliosus_data <- 
+  cbind(
+  numeric_details(path = "data/Liu et al. 1998.xlsx",remove = "replicate"),
+  other_details(path = "data/Liu et al. 1998.xlsx")
+  ) |> 
+  relocate(c("order","family","genus","species"),.before = 1) |> 
+  select(!any_of(c("centrum_radius_mm","centrum_diameter_mm","specimen","total_length_mm","precaudal_length_cm","sex")))
+
+# Alopias vulpinus (reference: Cailliet et al. 1983)
+alopias_vulpinus_data <- 
+  cbind(
+    numeric_details(path = "data/Cailliet et al. 1983.xlsx",remove = "replicate"),
+    other_details(path = "data/Cailliet et al. 1983.xlsx")
+  ) |> 
+  relocate(c("order","family","genus","species"),.before = 1) |> 
+  select(!any_of(c("centrum_diameter_mm","specimen","total_length_mm")))
+
+# Carcharias taurus (reference: Lucifora 2003, fig. 6.2)
+carcharias_taurus_data <- 
+  cbind(
+    numeric_details(path = "data/Lucifora 2003.xlsx",remove = "replicate"),
+    other_details(path = "data/Lucifora 2003.xlsx")
+  ) |> 
+  relocate(c("order","family","genus","species"),.before = 1) |> 
+  select(!any_of(c("centrum_radius_mm","centrum_diameter_mm","specimen")))
+
+# Carcharodon carcharias (reference: Cailliet et al. 1985, fig. 3, and Wintner and Cliff 1999, fig.)
+carcharodon_carcharias_cailliet <- 
+  cbind(
+    numeric_details(path = "data/Cailliet et al. 1985.xlsx",remove = "replicate"),
+    other_details(path = "data/Cailliet et al. 1985.xlsx")
+  ) |> 
+  relocate(c("order","family","genus","species"),.before = 1) |> 
+  select(!any_of(c("centrum_radius_mm","centrum_diameter_mm","total_length_mm")))
+
+carcharodon_carcharias_wintner <-
+  cbind(
+    numeric_details(path = "data/Wintner & Cliff 1999.xlsx"),
+    other_details(path = "data/Wintner & Cliff 1999.xlsx")
+  ) |> 
+  relocate(c("order","family","genus","species"),.before = 1) |> 
+  select(!any_of(c("LAB","CAPDATE","CDPRED","TL_Measured"))) |> 
+  rename("precaudal_length_cm" = "PCL(cm)",
+         "centrum_diameter_cm" = "CD(cm)",
+         "Tagno" = "TAGNO",
+         "netmass_kg" = "NETMASS",
+         "sex" = "Sex") |> 
+  mutate(sex = ifelse(sex == 1,"male","female")) |> 
+  mutate_if(is.character,as.factor) |> 
+  mutate(sex = relevel(sex,"male")) |> 
+  # Converting-factor to TL (Total Length)
+  mutate(total_length_cm = 1.251 * precaudal_length_cm + 5.207) |> 
+  mutate(log_tl = log10(total_length_cm),
+         log_cd = log10(centrum_diameter_cm),
+         log_netmass = log10(netmass_kg)) |> 
+  # Reshuffle column order.
+  relocate("total_length_cm",.after = "netmass_kg") |> 
+  # Remove row with missing values in key variables.
+  filter(!is.na(netmass_kg))
+
+# Cetorhinus maximus (reference: Natanson et al. 2008, sample size = 21)
+cetorhinus_maximus_data <- 
+  cbind(
+    numeric_details(path = "data/Natanson et al. 2008.xlsx",remove = "replicate"),
+    other_details(path = "data/Natanson et al. 2008.xlsx")
+  ) |> 
+  relocate(c("order","family","genus","species"),.before = 1)
+
+# Lamna nasus (reference: Natanson et al. 2002, sample size = 575)
+lamna_nasus_data <- 
+  cbind(
+    numeric_details(path = "data/Natanson et al. 2002.xlsx"),
+    other_details(path = "data/Natanson et al. 2002.xlsx")
+  ) |> 
+  relocate(c("order","family","genus","species"),.before = 1) |>
+  relocate("centrum_diameter_cm",.before = "total_length_cm") |> 
+  select(!any_of(c("sample_number","number_of_band","centrum_radius_mm","fork_length_cm","centrum_diameter_mm","sex")))
+
+# Lamna dipturs (reference: Goldman & Musick 2006, fig.2)
+lamna_dipturs_data <- 
+  cbind(
+    numeric_details(path = "data/Goldman & Musick 2006.xlsx",remove = "replicate"),
+    other_details(path = "data/Goldman & Musick 2006.xlsx")
+  ) |> 
+  relocate(c("order","family","genus","species"),.before = 1) |> 
+  select(!any_of(c("centrum_radius_mm","centrum_diameter_mm","precaudal_length_cm")))
+
+# Isurus oxyrinchus (reference:Natanson et al. 2006)
+isurus_oxyrinchus_data <- 
+  cbind(
+    numeric_details(path = "data/Natanson et al. 2006.xlsx"),
+    other_details(path = "data/Natanson et al. 2006.xlsx")
+  ) |> 
+  relocate(c("order","family","genus","species"),.before = 1) |>
+  relocate("centrum_diameter_cm",.before = "total_length_cm") |> 
+  select(!any_of(c("A","vetebral_radius_mm","fork_length_cm","centrum_diameter_mm","sex")))
+
+# Pseudocarcharias kamoharai (reference: Kindong et al. 2020)
+pseudocarcharias_kamoharai_data <- 
+  cbind(
+    numeric_details(path = "data/Kindong et al. 2020.xlsx",remove = "replicate"),
+    other_details(path = "data/Kindong et al. 2020.xlsx")
+  ) |> 
+  relocate(c("order","family","genus","species"),.before = 1) |> 
+  select(!any_of(c("centrum_radius_mm","fork_length_cm","centrum_diameter_mm")))
+```
+
+<!-- Group species dataframes-->
+
+```{r}
+# Lamniformes.
+lamniformes_data <- 
+  bind_rows(
+  alopias_pelagicus_data,
+  alopias_superciliosus_data,
+  alopias_vulpinus_data,
+  carcharias_taurus_data,
+  carcharodon_carcharias_cailliet,
+  carcharodon_carcharias_wintner |> select("order","family","genus","species","centrum_diameter_cm","total_length_cm","reference"),
+  cetorhinus_maximus_data,
+  lamna_nasus_data,
+  lamna_dipturs_data,
+  isurus_oxyrinchus_data,
+  pseudocarcharias_kamoharai_data
+) |> 
+  mutate(log_tl = log10(total_length_cm),
+         log_cd = log10(centrum_diameter_cm)
+         ) |> 
+  mutate(species = as.factor(species))
+
+# Alopiidae species measurement data.
+alopiidae_data <- 
+  bind_rows(
+  alopias_pelagicus_data,
+  alopias_superciliosus_data,
+  alopias_vulpinus_data) |> 
+  # Log-10 transform variables.
+  mutate(log_cd  = log10(centrum_diameter_cm),log_tl = log10(total_length_cm)) |> 
+  relocate("reference",.after = 9) # N = 622.
+
+# Combine all extant Lamnidae species.
+lamnidae_data <-
+  lamniformes_data |> 
+  filter(family == "Lamnidae")
+
+# Complete White shark dataset.
+carcharodon_carcharias_complete <- 
+  lamnidae_data |> 
+  filter(species == "Carcharodon carcharias")
+```
+
+<!--Auxiliary data -->
+
+```{r message=FALSE}
+# Stem-lamniform dataset.
+mesozoic_data <- openxlsx::read.xlsx(xlsxFile = "data/mesozoic_data.xlsx",sheet = 1)
+
+# Natanson et al. 2018: white shark data.
+Natanson <- "data/Natanson et al. 2018.xlsx"
+
+natanson_data <- 
+  excel_sheets(path = Natanson) |>
+  set_names() |>
+  map(read_excel, path = Natanson)
+```
+
+<!--Summary tables-->
+
+```{r}
+# Table 1.
+lamniformes_data |>
+  group_by(species) |> 
+  # Compute TL range per species.
+  summarise("Size Range (cm)" = paste0(round(min(total_length_cm),0), "-", round(max(total_length_cm),0)),
+            "Reference" = dplyr::first(reference),
+            "N" = n()) |> 
+  rename("Species" = "species") |> 
+  kable(caption = "Extant taxon sampling. Measurements from 10 lamniform species were sourced. Size-ranges are based on the total length
+                   of each species sample (not to be confused with true minimum and maximum body sizes).") |>
+  column_spec(column = 1,italic = T) |>
+  kable_styling(bootstrap_options = "striped",
+                            full_width = F)
+
+# Table 2.
+mesozoic_data |>
+  relocate(c(species,label), .before = centrum_diameter) |> 
+  relocate(c(reference),.after = estimated) |> 
+  kable(caption = "Fossil taxon sampling. Measurement data compiled from the literature of 15 lamniform shark species from the Cretaceous period.") |>
+  column_spec(column = 1,italic = c(rep(TRUE,3),FALSE,rep(TRUE,2),FALSE,rep(TRUE,8))) |>
+  kable_styling(bootstrap_options = "striped",
+                            full_width = F)
+```
+
+{{< pagebreak >}}
+
+### ME Error
+
+```{r}
+icc_results <-
+  bind_rows(
+    icc_custom(path = "data/Liu et al. 1999.xlsx") |> mutate(species = "Alopias pelagicus"),
+    icc_custom(path = "data/Liu et al. 1998.xlsx") |> mutate(species = "Alopias superciliosus"),
+    icc_custom(path = "data/Cailliet et al. 1983.xlsx") |> mutate(species = "Alopias vulpinus"),
+    icc_custom(path = "data/Lucifora 2003.xlsx") |> mutate(species = "Carcharias taurus"),
+    icc_custom(path = "data/Cailliet et al. 1985.xlsx") |> mutate(species = "Carcharodon carcharias"),
+    icc_custom(path = "data/Natanson et al. 2008.xlsx") |> mutate(species = "Cetorhinus maximus"),
+    icc_custom(path = "data/Goldman & Musick 2006.xlsx") |> mutate(species = "Lamna ditropis"),
+    icc_custom(path = "data/Kindong et al. 2020.xlsx") |> mutate(species = "Pseudocarcharias kamoharai")
+  ) |> 
+  mutate_at(.vars = "p-value",.funs = ~round(.x,digits = 3)) |> 
+  mutate(interpretation = case_when(value >= 0.9 ~ "Excellent agreement",TRUE ~ ""))
+```
+
+## Linear regression
+
+This section explores the relationship between TL-CD in extant male and female *C. carcharias* using OLS-regression modelling. A factorial anova was also used to test the influence of centrum diameter and sex on total length. Table results show that both 'log_cd' and 'sex' have significant effects on the dependent variable 'log_tl' while their interaction does not play a significant role in *C. carcharias*. These results are consistent with those presented in the original account by [@Winter1999].
+
+::: rmdnote
+$$log10(y) = \log10(\alpha) + log10(\beta) \times log10(x) + \epsilon$$
+
+**Where:**
+
+$y$ represents the dependent variable $x$ represents the independent variable $\beta_0$ is the intercept or the value of $y$ when $x$ equals 0 $\beta_1$ is the coefficient or the amount by which $y$ changes when $x$ increases by one unit $\epsilon$ represents the error term or the variability in $y$ that cannot be explained by $x$.
+:::
+
+```{r}
+# Linear model specification.
+MEq <- summary(lm(log_tl~log_cd, data = carcharodon_carcharias_wintner,subset = carcharodon_carcharias_wintner$sex == "male"))
+FEq <- summary(lm(log_tl~log_cd, data = carcharodon_carcharias_wintner,subset = carcharodon_carcharias_wintner$sex == "female"))
+
+# Coefficients.
+MCe <- unlist(as.character(round(MEq$coefficients[,1],4)))
+MCe <- "Y_male = 1.9238 + 0.8873 * x"
+FCe <- unlist(as.character(round(FEq$coefficients[,1],4)))
+FCe <- "Y_female = 1.9444 + 0.8704 * x"
+
+# Factorial anova test.
+aov(formula = log_tl~log_cd*sex,data = carcharodon_carcharias_wintner) |>
+  tidy() |> 
+  setNames(nm = c("Term","Df","SS","MSS","F-statistic","P-value")) |> 
+  knitr::kable(caption = "Factorial anova test") |>
+  kable_styling(bootstrap_options = "striped",full_width = F)
+```
+
+### Model fit I (TL)
+
+See section @sec-gws for regression results based on all *C. carcharias* data.
+
+```{r message=FALSE, results='hide'}
+# Linear model specification (OLS: First degree)
+length_linear_fit_ols <- lm(log_tl~log_cd, data = carcharodon_carcharias_wintner)
+
+# Summary.
+# length_linear_fit_ols |> summary() |> broom::tidy(conf.int = TRUE)
+tbl_regression(length_linear_fit_ols, include = everything(),intercept = TRUE) |> 
+  as_gt() |>  
+  tab_header("Linear regression model output (CD ~ TL)") |>
+  tab_options(table.align='left')
+
+# Model Accuracy.
+round(broom::glance(length_linear_fit_ols)$sigma,digits = 3) # RSE.
+# Model Error (Residual sum of squares, RSS = deviance)
+# Residuals ( = the lack of fit)
+length_linear_fit_ols |> 
+  resid() |>
+  crossprod() |> 
+  cat() # RSS
+
+# Compare with Robust linear regression.
+length_linear_fit_rlm <- rlm(log_tl~log_cd, data = carcharodon_carcharias_wintner)
+summary(length_linear_fit_rlm)$sigma # Residual standard error (no major difference from the OLS fit)
+
+# Compare models.
+AICc(length_linear_fit_ols,length_linear_fit_rlm)
+
+# Test if slope is equal to 1 (i.e. isometry).
+isomodel_01 <- 
+  smatr::slope.test(y = carcharodon_carcharias_wintner$log_tl,
+                    x = carcharodon_carcharias_wintner$log_cd,
+                    test.value = 1,method = "OLS") # Negative allometry.
+
+# Mean Percent Prediction Error (PPE).
+ppe_01 <-
+  ppe(true = 10^carcharodon_carcharias_wintner$log_tl,
+      pred = 10^as.vector(fitted(length_linear_fit_ols)))
+```
+
+```{r warning=FALSE, message=FALSE, fig.cap="Relationship between centrum diameter and total length in C. carcharias (male and female). Observations (i.e., individuals) from the original dataset by Wintner & Cliff (1999) with missing mass estimates were dropped (n = 3). Fitted model equation derived from OLS."}
+# Plot.
+carcharodon_carcharias_wintner |> 
+  ggplot(mapping = aes(x = log_cd,y = log_tl),group = sex, colour = sex, fill = sex) +
+  annotation_logticks() + 
+  geom_point(aes(color = sex,size = log_netmass),
+             shape = 19) +
+  scale_color_manual(values = c("#B83A4B","#016895")) +
+  scale_fill_manual(values =  c("#B83A4B","#016895")) +
+  geom_smooth(method = "lm", se = FALSE, color = "black") +
+  ggpmisc::stat_poly_eq(use_label(c("eq", "adj.R2", "f", "p", "n")),
+                        size = 4.0,label.x = "left",label.y = "top",
+                        color = "black") +
+  # RLM line.
+  geom_abline(slope = 0.8728,intercept = 1.9385,colour = "#016895",linetype = 2) +
+  # Labels.
+  labs(size = "Body mass (log10 kg)",x = "Centrum diameter (log10 cm)", y = "Total length (log10 cm)",
+       colour = "sex",
+       title = NULL,
+       subtitle = NULL,
+       caption = "") +
+  geom_label_repel(aes(label = Tagno),
+                  box.padding   = 0.35, 
+                  point.padding = 0.5,max.overlaps = 10,
+                  segment.color = 'grey50') +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.position = "bottom",
+        legend.title = element_text(face = "bold"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1)
+```
+
+### Regression diagnostics (TL)
+
+```{r fig.cap="Visual check of model assumptions (i.e. Linearity, Independence, Normality and Equal Variances)."}
+# Linear model assumption.
+performance::check_normality(length_linear_fit_ols)
+performance::check_model(x = length_linear_fit_ols,
+                         check = c("normality", "linearity","homogeneity", "outliers"),
+                         axis_title_size = 8)
+```
+
+```{r}
+# Assumptions checks.
+kable(nice_assumptions(model = length_linear_fit_ols), col.format.p = 2:4,
+      caption = "Diagnostics for the linear model (CD-TL) applied to C. carcharias.
+                 Diagnostic is how many assumptions (i.e. normality of residuals, homoscedasticity, and independence) are not respected by the model fit.
+                 P-values < .05 imply assumptions are not respected.") |>
+  kable_styling(bootstrap_options = "striped",full_width = T)
+```
+
+### Model fit II (BM)
+
+```{r warning=FALSE, message=FALSE, results='hide'}
+# Fit body mass linear model with OLS.
+mass_linear_fit_ols <- lm(log_netmass ~ log_cd, data = carcharodon_carcharias_wintner)
+# Summary.
+mass_linear_fit_ols |> 
+  summary() |> 
+  broom::tidy(conf.int = TRUE)
+
+# Accuracy.
+broom::glance(mass_linear_fit_ols)
+
+# RLM.
+mass_linear_fit_rlm <- rlm(log_netmass~log_cd, data = carcharodon_carcharias_wintner)
+# RSE.
+summary(mass_linear_fit_rlm)$sigma
+
+# Test if slope is equal to 3.
+isomodel_02 <- smatr::slope.test(y = carcharodon_carcharias_wintner$log_netmass,
+                                 x = carcharodon_carcharias_wintner$log_cd,
+                                 test.value = 3,method = "OLS") # negative allometry.
+
+# lrtest(mass_linear_fit_ols,mass_linear_fit_rlm)
+
+# Mean Percentage Prediction Error (PPE).
+ppe_02 <-
+  ppe(true = 10^carcharodon_carcharias_wintner$log_netmass,
+      pred = 10^as.vector(fitted(mass_linear_fit_ols)))
+```
+
+```{r warning=FALSE,message=F, fig.cap="Relationship between the logarithm of centrum diameter and mass (A) and centrum diameter and mass on the measurement scale (B) in C. carcharias."}
+
+# Prediction intervals.
+piBM <- 
+  predict(object = mass_linear_fit_ols,newdata = data.frame(log_cd = carcharodon_carcharias_wintner$log_cd),interval = "prediction") |> 
+  as.data.frame()
+
+ggarrange(
+  # 1. CD vs Mass on log-scales.
+  carcharodon_carcharias_wintner |> 
+  ggplot(mapping = aes(x = log_cd,y = log_netmass),group = sex, colour = sex, fill = sex) +
+  annotation_logticks() + 
+  geom_point(aes(color = sex),shape = 19) +
+  scale_color_manual(values = c("#B83A4B","#016895")) +
+  scale_fill_manual(values =  c("#B83A4B","#016895")) +
+  geom_smooth(method = "lm", se = FALSE, color = "black") +
+  # Prediction intervals.
+  geom_line(aes(y = piBM$lwr), col = "black", linetype = "dashed") +
+  geom_line(aes(y = piBM$upr), col = "black", linetype = "dashed") +
+  ggpmisc::stat_poly_eq(use_label(c("eq", "adj.R2", "f", "p", "n")),
+                        size = 4.0,label.x = "left",label.y = "top",
+                        color = "black") +
+  # Labels.
+  labs(x = "Centrum diameter (log10 cm)", y = "Body mass (log10 kg)",
+       colour = "Sex") +
+  geom_label_repel(aes(label = Tagno),
+                  box.padding   = 0.35, 
+                  point.padding = 0.5,max.overlaps = 10,
+                  segment.color = 'grey50') +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.position = "none",
+        legend.title = element_text(face = "bold"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1),
+  # 2. CD vs Mass on raw measurment scale.
+  carcharodon_carcharias_wintner |> 
+  ggplot(mapping = aes(x = centrum_diameter_cm,y = netmass_kg),group = sex, colour = sex, fill = sex) +
+  geom_point(aes(color = sex),shape = 19) +
+  scale_color_manual(values = c("#B83A4B","#016895")) +
+  scale_fill_manual(values =  c("#B83A4B","#016895")) +
+  stat_poly_line(aes(colour = sex),formula = y ~ poly(x, 3, raw = TRUE)) +
+  stat_poly_eq(aes(colour = sex, label = after_stat(eq.label)),formula = y ~ poly(x, 3, raw = TRUE)) +
+  # Labels.
+  labs(x = "Centrum diameter (cm)", y = "Body mass (kg)",colour = "Sex") +
+  geom_label_repel(aes(label = Tagno),
+                  box.padding   = 0.35, 
+                  point.padding = 0.5,max.overlaps = 10,
+                  segment.color = 'grey50') +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.position = "none",
+        legend.title = element_text(face = "bold"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1),
+  # Add legend.
+  common.legend = F,align = "hv")
+```
+
+### Leverage analysis (BM)
+
+Here we explore the presence of unusual and influential observations in the BM model.
+
+<!--Regression diagnostics-->
+
+```{r message=FALSE, results='hide',fig.cap="Regression diagnostics."}
+# Regression diagnostics.
+performance::check_normality(mass_linear_fit_ols)
+performance::check_model(x = mass_linear_fit_ols,
+                         check = c("normality", "linearity","homogeneity", "outliers"))
+```
+
+```{r}
+# One assumption (i.e. normality) is not respected.
+kable(nice_assumptions(model = mass_linear_fit_ols), stars = T, col.format.p = 2:4) |>
+  kable_styling(bootstrap_options = "striped",
+                full_width = T)
+```
+
+<!--Leverage analysis-->
+
+```{r fig.cap="Leverage analysis. The size of the bubbles in the plot indicates the Cook’s D value of each data point."}
+cook.D <- cooks.distance(model = mass_linear_fit_ols)
+# Plot.
+layout(matrix(c(1,2,3), nrow = 1, ncol = 3,byrow = FALSE),
+       respect = TRUE,widths = c(4,4,4),heights = c(6,6,6))
+# Q-Q plot.
+invisible(capture.output(
+  car::qqPlot(mass_linear_fit_ols, main="Q-Q plot", distribution="norm",ylab = "Studentized Residuals",
+              col = "#B83A4B", 
+              col.lines=carPalette()[1],
+              pch = 19)
+)
+)
+
+# Cooks distance.
+plot(cook.D, pch=21, cex=1, main="Influential observations by Cooks distance", 
+     col = "black",bg = "white",font.lab = 2, cex.main = 1,bty = "n")
+
+abline(h = 4/nrow(carcharodon_carcharias_wintner), col="#B83A4B",lwd = 2)
+# Regression Influence Plot.
+invisible(capture.output(car::influencePlot(model = mass_linear_fit_ols, fill.col=carPalette()[5],font.lab = 2)))
+```
+
+<!--Nested model comparison-->
+
+```{r results='hide'}
+# Model improvement.
+mass_linear_fit_ols_2 <- lm(log_netmass ~ log_cd, data = carcharodon_carcharias_wintner[cook.D < 4/length(cook.D),])
+#summary(mass_linear_fit_ols_2)
+
+# Residual standard error (RSE) and R-squared.
+c(summary(mass_linear_fit_ols)$sigm,summary(mass_linear_fit_ols_2)$sigma
+) |> setNames(nm = c("Model I","Model II"))
+
+c(summary(mass_linear_fit_ols)$r.squared,summary(mass_linear_fit_ols_2)$r.squared
+) |> setNames(nm = c("Model I","Model II"))
+
+# Check diagnostics.
+nice_table(nice_assumptions(model = mass_linear_fit_ols_2),stars = T, col.format.p = 2:4)
+
+# Quadratic model (or second-degree polynomial).
+mass_quad_fit_ols <- lm(log_netmass~log_cd+I(log_cd^2),data = carcharodon_carcharias_wintner,subset = cook.D < 4 / length(cook.D))
+mass_quad_fit_ols |> 
+  summary()
+
+# Model selection.
+lrtest(mass_linear_fit_ols_2,mass_quad_fit_ols)  # No improvement.
+AICc(mass_linear_fit_ols_2,mass_quad_fit_ols)
+
+# Mean Percentage Prediction Error (PPE).
+ppe_03 <-
+  ppe(true = 10^carcharodon_carcharias_wintner[cook.D < 4/length(cook.D),]$log_netmass,
+      pred = 10^as.vector(fitted(mass_linear_fit_ols_2)))
+```
+
+### Fossil Predictions (I)
+
+#### Total length
+
+In this section, **TL and BM** estimates are based on the white shark data from Wintner & Cliff (1999). Point estimates, 95% prediction and confidence intervals are computed for each specimen. 
+
+Prediction are given by:
+
+$$Y_i = \hat{\alpha} + \hat{\beta} \cdot X_i$$
+
+**Specimen remarks**
+
+P922-33: one side is cracked and artificially ‘swollen’ measuring 129 mm; the other un-deformed side is 125 mm. P922-32: 126 mm but inflated due to cracking. P9382: 118 mm. P922-37: 114 mm but most of the surface covered with nodules so measurement might be artificially inflated. P922-29: 117 mm as preserved but greatest radius is 63 mm which indicates an original 126 mm.
+
+```{r}
+# Fossil shark centrum diameter in centimeters.
+aptian_shark <- data.frame(log_cd = log10(c(12.5,12.6,11.8,11.4,12.6)))
+```
+
+```{r}
+# Total length (TL) estimates with 95% CI & PI.
+pred_tl <-
+  cbind(10^predict(object = length_linear_fit_ols,newdata = aptian_shark,interval = "prediction"),
+        10^predict(object = length_linear_fit_ols,newdata = aptian_shark,interval = "confidence")[,2:3]) |> 
+  as.data.frame() |> 
+  unname() |> 
+  setNames(nm = c("fit",".pred_lower",".pred_upper",".conf_lower",".conf_upper")) |>
+  # Add specimen and model information.
+  mutate(specimen = c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29"),
+         source = rep("White shark data",5))
+
+# Convert into long format.
+long_format <- 
+  data.frame(fit = unlist(as.vector(pred_tl$fit)),
+             xmin = c(pred_tl$.pred_lower,pred_tl$.conf_lower),
+             xmax = c(pred_tl$.pred_upper,pred_tl$.conf_upper),
+             intervals = c(rep("prediction",5),rep("confidence",5)),
+             specimen = rep(c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29"),2)) |> 
+  mutate(specimen = fct_relevel(specimen,c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29")))
+
+# Prediction plot.
+tl_graph <-
+  long_format |> 
+  ggplot(aes(y = specimen, x = fit, colour = intervals,linetype = intervals)) + 
+  scale_y_discrete(labels = pred_tl$specimen) +
+  geom_errorbar(aes(xmin = xmin, xmax = xmax),
+                width = 0.2,linewidth = 1.3,show.legend = T) +
+  geom_point(size = 3,fill = "white",
+             shape = 21,show.legend = F) +
+  # Color intervals.
+  scale_fill_manual(values =  c("#4D4D4D","#4D4D4D")) +
+  scale_color_manual(values = c("#4D4D4D","#4D4D4D")) +
+  # Average TL length
+  geom_vline(aes(xintercept=mean(fit)),linetype=1,col = "#4D4D4D", lwd = 1.5) +
+  # Largest documented extant great white shark (Carcharodon carcharias) (6.4 m) [Randall JE 1973].
+  geom_vline(aes(xintercept = 640),linetype=1,col = "#B2182B", lwd = 1.5) +
+  # Text
+  annotate("text",x = 700, y = 3.8,
+           label = "upper~size~limit~of~italic(C.~carcharias)",
+           parse = TRUE,cex = 4,
+           col = "#B2182B",fontface = "bold") +
+  # Curve.
+  annotate(geom = "curve", x = 700, y = 3.9, xend = 645, yend = 3.8,
+          curvature = .3, arrow = arrow(length = unit(2, "mm"))) +
+  theme_minimal() +
+  labs(x = "Total length (cm)",y = NULL) +
+  theme(legend.position = "right",
+        title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "plain"),
+        axis.text.y = element_text(face = "bold"))
+
+# Apply the bias correction factor.
+# pred_tl$fit * exp(summary(length_linear_fit_ols)$sigma^2/2) # corrected factor applied to predictions.
+
+# intervals(xvar = pred_tl$fit)[c(1,7:8)]
+```
+
+#### Body mass
+
+```{r warning=FALSE}
+# Fossil mass prediction.
+pred_mass <-
+  cbind(10^predict(object = mass_linear_fit_ols_2,newdata = aptian_shark,interval = "prediction"),
+        10^predict(object = mass_linear_fit_ols_2,newdata = aptian_shark,interval = "confidence")[,2:3]) |> 
+  as.data.frame() |> 
+  unname() |> 
+  setNames(nm = c("fit",".pred_lower",".pred_upper",".conf_lower",".conf_upper")) |>
+  # Add specimen and model information.
+  mutate(specimen = c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29"),
+         source = rep("White shark data",5))
+
+long_format_mass <- 
+  data.frame(fit = unlist(as.vector(pred_mass$fit)),
+             xmin = c(pred_mass$.pred_lower,pred_mass$.conf_lower),
+             xmax = c(pred_mass$.pred_upper,pred_mass$.conf_upper),
+             intervals = c(rep("prediction",5),rep("confidence",5)),
+             specimen = rep(c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29"),2)) |> 
+  # slice(1:8) |> 
+  mutate(specimen = fct_relevel(specimen,c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29")))
+
+# Plot.
+mass_graph <- 
+  long_format_mass |> 
+  ggplot(aes(y=specimen, x=fit, colour=intervals,linetype = intervals)) + 
+  scale_y_discrete(labels = pred_mass$specimen) +
+  geom_errorbar(aes(xmin = xmin, xmax = xmax),
+                width = 0.2,linewidth = 1.3,show.legend = T) +
+  geom_point(size = 3,fill = "white", shape = 21,show.legend = F) +
+  scale_fill_manual(values =  c("#4D4D4D","#4D4D4D")) +
+  scale_color_manual(values = c("#4D4D4D","#4D4D4D")) +
+  theme_minimal() +
+  # Average BM
+  geom_vline(aes(xintercept=mean(fit)),linetype=1,col = "#4D4D4D", lwd = 1.5) +
+  # Maximum Great white shark body-weight: <https://www.fisheries.noaa.gov/species/white-shark>
+  geom_vline(xintercept = 2041,lwd = 1.5, linetype=1, color = "#B2182B") +
+  annotate("text", x = 2350, y = 3.2, label = "upper~size~limit~of~italic(C.~carcharias)",
+           parse = TRUE,col = "#B2182B",size = 3.5) +
+  labs(x = "Body mass (kg)",y = NULL) +
+  theme(legend.position = "right",
+        title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "plain"),
+        axis.text.y = element_text(face = "bold"))
+
+# intervals(xvar = pred_mass$fit)[c(1,7:8)]
+```
+
+```{r fig.cap = "TL and BM estimates for the Darwin cardabiodontid vertebral centra."}
+# Combine length and mass predictions graphs.
+ggarrange(tl_graph,mass_graph,common.legend = T) + theme(aspect.ratio = .5)
+```
+
+```{r fig.cap = "Log-space of C. carcharias centrum size vs the fossil specimens."}
+bind_rows(
+  carcharodon_carcharias_wintner |> select(log_cd,species),aptian_shark |> mutate(species = "NTM P")) |> 
+  ggplot(mapping = aes(x = log_cd, fill = species)) +
+  geom_histogram(bins = 30) +
+  scale_fill_manual(values = c("#E16A86","black")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(face = "bold"),
+        axis.text.y = element_text(face = "bold",angle = 90,hjust = 0.5,vjust = .5),
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"),
+        legend.title = element_text(face = "bold"),
+        title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "plain"),
+        aspect.ratio = 1) +
+  labs(title = "Log-10 space",subtitle = "C. carcharias vs. Darwin cardabiodontid vertebral centra",
+       x = "Centrum diameter (log10 cm)", y = "Count", fill = "")
+```
+
+<!--Visualize main results: Total Length -->
+
+```{r fig.cap = "Predicted TL-values of the Darwin cardabiodontid specimens plotted within the context of the extant white shark data (Wintner & Cliff 1999)."}
+# Prepare data.
+log_pred_tl <-
+  cbind(predict(object = length_linear_fit_ols,newdata = aptian_shark,interval = "prediction"),
+        predict(object = length_linear_fit_ols,newdata = aptian_shark,interval = "confidence")[,2:3]) |> 
+  as.data.frame() |> 
+  unname() |> 
+  setNames(nm = c("fit",".pred_lower",".pred_upper",".conf_lower",".conf_upper")) |> 
+  mutate(specimen = c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29"))
+
+# PI intervals.
+PI <- predict(object = length_linear_fit_ols,
+              newdata = data.frame(log_cd = carcharodon_carcharias_wintner$log_cd),
+              interval = "prediction",se.fit = T,level = .95)
+
+# Prediction interval data subset for plotting.
+tl_intervals <- 
+  log_pred_tl |> 
+  mutate(log_cd = aptian_shark$log_cd)
+
+p <- 
+  carcharodon_carcharias_wintner |> 
+  ggplot(aes(x = log_cd, y = log_tl)) +
+  geom_point(fill = "white",size = 2, shape = 21) +
+  geom_abline(intercept = 1.9393, slope = 0.8706,linewidth = 1,colour = "black") +
+  annotation_logticks() +
+  expand_limits(x = c(0.3443923,1.1003705), y = c(2.228113,2.937239)) +
+  # Add bracketing lines.
+  geom_vline(xintercept = 0.3443923,linetype = "dashed") +
+  geom_vline(xintercept = 0.8267225,linetype = "dashed") +
+  # Add prediction intervals.
+  geom_line(aes(x = log_cd, y = PI$fit[,"lwr"]), color = "#E16A86") +
+  geom_line(aes(x = log_cd, y = PI$fit[,"upr"]), color = "#E16A86") +
+  # Add fossil predictions to base plot.
+  geom_point(data = aptian_shark,mapping = aes(x = log_cd, y = log_pred_tl$fit), colour = "black", fill = "white",pch = 22, size = 2) +
+  # Interpolation line.
+  annotate(geom = "segment", x = 0.3443923, xend = 0.8267225, y = 2.8, yend = 2.8,
+           colour = "darkgreen",arrow = arrow(type = "closed",length = unit(2, "mm"),ends = "both",angle = 20)) +
+  # Extrapolation line.
+  annotate(geom = "segment", x = 0.8267225, xend = 1.1003705, y = 2.3, yend = 2.3,
+           colour = "darkgreen",arrow = arrow(type = "closed",length = unit(2, "mm"),ends = "both",angle = 20)) +
+  labs(title = NULL,subtitle = NULL,
+       y = "Total length (log10 cm)",
+       x = "Centrum diameter (log10 cm)") +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1)
+
+# Add error bars.
+p + 
+  geom_errorbar(data = tl_intervals, aes(x = log_cd,y = fit, ymin = .pred_lower,ymax = .pred_upper),
+                width = 0.02,color = "black")
+```
+
+<!--Body Mass-->
+
+```{r fig.cap = "Predicted BM-values of the Darwin cardabiodontid specimens plotted within the context of the extant white data (Wintner & Cliff 1999)."}
+# Prepare data.
+log_pred_mass <-
+  cbind(predict(object = mass_linear_fit_ols_2,newdata = aptian_shark,interval = "prediction"),
+        predict(object = mass_linear_fit_ols_2,newdata = aptian_shark,interval = "confidence")[,2:3]) |> 
+  as.data.frame() |> 
+  unname() |> 
+  setNames(nm = c("fit",".pred_lower",".pred_upper",".conf_lower",".conf_upper"))
+  # Raw-scale.
+  # mutate(across(everything(), ~ 10^.)) |> 
+  # mutate(across(everything(), ~ round(.x,digits = 2)))
+
+# PI intervals.
+mPI <- predict(object = mass_linear_fit_ols_2,
+               newdata = data.frame(log_cd = carcharodon_carcharias_wintner[cook.D < 4/length(cook.D),]$log_cd),
+               interval = "prediction",se.fit = T,level = .95)
+
+# Prediction interval data subset for plotting.
+mass_intervals <- 
+  log_pred_mass |> 
+  mutate(log_cd = aptian_shark$log_cd)
+
+p1 <- 
+  carcharodon_carcharias_wintner |> 
+  filter(cook.D < 4 / n()) |> 
+  ggplot(aes(x = log_cd, y = log_netmass)) +
+  geom_point(fill = "white",size = 2, shape = 21) +
+  geom_abline(intercept = 0.7598, slope = 2.5089,linewidth = 1,colour = "black") +
+  annotation_logticks() +
+  expand_limits(x = c(0.3443923,1.1003705), y = c(1.623249, 3.674706)) +
+  # Add bracketing lines.
+  geom_vline(xintercept = 0.3443923,linetype = "dashed") +
+  geom_vline(xintercept = 0.7867514,linetype = "dashed") +
+  # Add prediction intervals.
+  geom_line(aes(x = log_cd, y = mPI$fit[,"lwr"]), color = "#E16A86") +
+  geom_line(aes(x = log_cd, y = mPI$fit[,"upr"]), color = "#E16A86") +
+  # Add fossil predictions to base plot.
+  geom_point(data = aptian_shark,mapping = aes(x = log_cd, y = log_pred_mass$fit), colour = "black", fill = "white",pch = 22, size = 2) +
+  # Interpolation line.
+  annotate(geom = "segment", x = 0.3443923, xend = 0.7867514, y = 3.0, yend = 3.0,
+           colour = "darkgreen",arrow = arrow(type = "closed",length = unit(2, "mm"),ends = "both",angle = 20)) +
+  # Extrapolation line.
+  annotate(geom = "segment", x = 0.7867514, xend = 1.1003705, y = 2.0, yend = 2.0,
+           colour = "darkgreen",arrow = arrow(type = "closed",length = unit(2, "mm"),ends = "both",angle = 20)) +
+  labs(title = NULL,subtitle = NULL,
+       y = "Body mass (log10 kg)",
+       x = "Centrum diameter (log10 cm)") +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1)
+
+# Add error bars.
+p1 + 
+  geom_errorbar(data = mass_intervals, aes(x = log_cd,y = fit, ymin = .pred_lower,ymax = .pred_upper),
+                width = 0.02,color = "black")
+```
+
+### Model fit III (TL)
+
+#### Species-level analysis
+
+We combine all lamniform species data into one master dataframe (N=1912). *O. ferox* and *O. noronhai* are not considered because of low sample size. A series of species-level OLS models are built and fitted. Slope and intercept values are subsequently compared.
+
+```{r message = FALSE, fig.cap = "Bivariate visualizations (log-scale) showing the relationship between CD-TL in lamniform species."}
+# Function.
+fit_regression <- function(x) {
+  lm(log_tl ~ log_cd, x)
+}
+
+# Fit linear models.
+slope_intercept <- 
+  lamniformes_data |> 
+  group_by(species) |> 
+  do(model = fit_regression(.)) |>
+  tibble() |>
+  mutate("β0" = map_dbl(model, ~ coef(.)["(Intercept)"]),
+         "β1" = map_dbl(model, ~ coef(.)["log_cd"])) |> 
+  mutate("y" = paste(round(β0,digits = 2),"+", round(β1,digits = 2),"x")) |> 
+  mutate(round(map_df(model, ~ glance(.)[1]),digits = 2)) |> 
+  mutate(map_df(model, ~ glance(.)[12])) |> 
+  mutate(map_df(model, ~ tidy(.,conf.int = TRUE)["p.value"][2,])) |> 
+  mutate(map_df(model, ~ tidy(.,conf.int = TRUE)["conf.low"][2,])) |> 
+  mutate(map_df(model, ~ tidy(.,conf.int = TRUE)["conf.high"][2,])) |> 
+  mutate("MAE" = round(map_dbl(model, ~ mean(abs(residuals(.)))),digits = 2)) |>
+  # select(-model) |> 
+  rename("N" = "nobs")
+
+# Pearson correlations.
+lamn_corr <- 
+  lamniformes_data  |> 
+  group_by(species) |> 
+  summarize(correlation = cor(log_cd,log_tl, method = "pearson"))
+
+# Pearson correlations on the log-10 values: Entire dataset.
+cor(x = lamniformes_data$log_tl,y = lamniformes_data$log_cd) # cor = 0.79 (no different from the raw values: cor = 0.74)
+
+# Color vector.
+col_vec <- c("#264653", "#2A9D8F", "#E9C46A", "#F4A261", "#E76F51",
+             "#457B9D", "#1D3557", "#F0A8C0FF", "#6D6875", "#A8DADC")
+
+# CD-TL relationship in lamniform species.
+intraspecific_graph <- lamniformes_data |> 
+  mutate(ecology = case_when(species == "Cetorhinus maximus" ~ "Microphagous", TRUE ~ "Macrophagous")) |> 
+  ggplot(aes(x = log_cd, y = log_tl)) +
+  scale_fill_manual(values =  col_vec) +
+  scale_color_manual(values = col_vec) +
+  labs(title = NULL,subtitle = NULL,
+       y = "Total length (log10 cm)",
+       x = "Centrum diameter (log10 cm)", colour = "Species") +
+  annotation_logticks() +
+  geom_smooth(aes(colour = species),method = "lm",se = F) + 
+  geom_point(aes(color = species), fill = "white",size = 2, shape = 21) +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.position = "none",
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1)
+
+# Slopes only.
+estimated_slopes <- lamniformes_data |>
+  group_by(species) |>
+  do(tidy(lm(log_tl ~ log_cd, data = .),conf.int = T)) |>
+  dplyr::select(species,term,estimate,contains("conf")) |>
+  rename("Estimate" = "estimate") |>
+  filter(term != "(Intercept)") |>
+  ggplot(mapping = aes(x = fct_rev(species), y = Estimate)) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+                color = col_vec,
+                position = position_dodge(0.4), width = .3,show.legend = F) +
+  geom_point(aes(color = species),shape = 21,fill = "white",show.legend = F) +
+  geom_hline(yintercept = c(1), linetype = "dashed") +
+  scale_fill_manual(values = col_vec) +
+  scale_color_manual(values = col_vec) +
+  labs(x = NULL) +
+  coord_flip() +
+  theme_bw() +
+  theme(aspect.ratio = 1,
+        panel.grid.major.y = element_blank(),
+        axis.text.y = element_blank())
+
+# Alternative graph.
+lamniformes_data |>
+  dplyr::select(species, log_cd,log_tl) |>
+  ggplot(aes(x = log_cd, y = log_tl)) +
+  geom_point(size = 1, shape = 21, fill = "white", colour = "#2A2B3AFF") +
+  geom_smooth(method = "lm",col = "#08306b") +
+  ggpmisc::stat_poly_eq(use_label(c("eq", "adj.R2", "f", "p")),
+                        size = 1.5,label.x = "left",label.y = "top",
+                        color = "black") +
+  labs(x = "Centrum diameter (log10 cm)", y = "Total length (log10 cm)") +
+  facet_wrap(.~species, scales = "free",ncol = 4,nrow = 4) +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.position = "none",
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        strip.text = element_text(face = "bold.italic"),
+        aspect.ratio = 1)
+  
+dist_species <- 
+  lamniformes_data |> 
+  select(log_tl,log_cd, species) |> 
+  pivot_longer(cols = c("log_tl","log_cd"),values_to = "value",names_to = "var") |> 
+  ggplot(aes(x = value, y = species)) +
+  stat_slab(aes(y = fct_rev(species), fill = species),height = 2, color = "white") +
+  scale_fill_manual(values =  col_vec) +
+  scale_color_manual(values = col_vec) +
+  labs(x = "Centrum diameter (log10 cm)", 
+       y = NULL) +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank(),
+        axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_text(face = "italic"),
+        legend.position = "none",
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1) +
+  facet_wrap(.~var,scales = "free_x")
+```
+
+#### Heterogeneous slopes test 
+
+```{r}
+# Fit models.
+common_slope <- lm.rrpp(log_tl ~ log_cd + species, data = lamniformes_data) # homogeneity of slopes test (additive model)
+unqiue_slope <- lm.rrpp(log_tl ~ log_cd * species, data = lamniformes_data) # heterogeneity of slopes test (iteraction model)
+
+# summary(common_slope)$table # null
+# summary(unqiue_slope)$table # alternative
+
+# Which model is better?
+# anova(common_slope,unqiue_slope,print.progress = F)$table
+model.comparison(common_slope,unqiue_slope,type = "logLik")
+
+# To work with emmeans.
+unqiue_slope_em <- lm(log_tl ~ log_cd * species, data = lamniformes_data) # heterogeneity of slopes test (iteraction model)
+
+# Intercepts (predicted values of a when b = 0)
+ggarrange(
+  emmeans::emmeans(object = unqiue_slope_em, ~ species, at = list(log_cd = 0)) |> 
+  as.data.frame() |> 
+  suppressMessages() |> 
+  ggplot(mapping = aes(x = species,y = emmean, fill = species, colour = species)) +
+  geom_point(fill = "white", shape = 21) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL),color = col_vec,
+                position = position_dodge(0.4), width = .3) +
+  scale_fill_manual(values = col_vec) +
+  scale_color_manual(values = col_vec) +
+  labs(x = NULL, y = "β0 (Intercept)") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45,hjust = 1,vjust = 1),
+        axis.title = element_text(face = "bold"),
+        aspect.ratio = 1),
+  # Slopes.
+  emmeans::emtrends(unqiue_slope_em, specs = "species", var = "log_cd") |> 
+  as.data.frame() |> 
+  ggplot(mapping = aes(x = species,y = log_cd.trend, fill = species, colour = species)) +
+  geom_point(fill = "white", shape = 21) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL),color = col_vec,
+                position = position_dodge(0.4), width = .3) +
+  scale_fill_manual(values = col_vec) +
+  scale_color_manual(values = col_vec) +
+  labs(x = NULL, y = "β1 (Slope)") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45,hjust = 1,vjust = 1),
+        axis.title = element_text(face = "bold"),
+        aspect.ratio = 1),
+  # Common legend.
+  common.legend = T,legend = "none",label.x = NULL
+)
+
+# Compare slopes.
+PW <- pairwise(unqiue_slope, groups = lamniformes_data$species, covariate = NULL)
+
+# Select the ones that are significant.
+summary(PW, test.type = "dist", confidence = 0.95, stat.table = TRUE)$summary.table  |> 
+  as.data.frame() |> 
+  filter(`Pr > d` <= 0.05) |> 
+  mutate(across(1:4, ~ round(.x, digits = 3))) |> 
+  knitr::kable(caption = "Pairwise statistics from an analysis of covariance. The dist-test compares LS means 
+                         (estimated response at mean log-CD) among species.") |> 
+  kable_styling()
+```
+
+#### Interspecific models
+
+`ML1` -- Interspecific model that includes all sampled lamniform species.
+`ML2` -- Interspecific model with reduced taxon coverage; *Alopias* species excluded.
+`ML3` -- Interspecific model with reduced taxon coverage; *Alopias* and *Cetorhinus* species excluded.
+`ML4` -- Interspecific model with **Lamnidae** species.
+
+```{r}
+# Lamniformes (all species).
+interSM1 <- lm(log_tl ~ log_cd, data = lamniformes_data)
+# Lamniformes (excluding Alopidae)
+interSM2 <- lm(log_tl ~ log_cd, data = lamniformes_data[!lamniformes_data$genus == "Alopias",])
+# Lamniformes (excluding Alopidae and Cetorhinidae)
+interSM3 <- lm(log_tl ~ log_cd, data = lamniformes_data[!lamniformes_data$genus %in% c("Alopias","Cetorhinus"),])
+# Lamniformes (excluding all but Lamnidae)
+interSM4 <- lm(log_tl ~ log_cd, data = lamniformes_data[lamniformes_data$family == "Lamnidae",])
+
+# Compare LM2 versus LM4. How does TL change for one unit increase in CD?
+# tidy(interSM1,conf.int = T)
+# tidy(interSM2,conf.int = T)
+# tidy(interSM3,conf.int = T)
+# tidy(interSM4,conf.int = T)
+
+# PPE.
+ppe(true = 10^lamniformes_data$log_tl,pred = 10^fitted(interSM1))$mean
+ppe(true = 10^lamniformes_data[!lamniformes_data$genus == "Alopias",]$log_tl,
+    pred = 10^fitted(interSM2))$mean
+ppe(true = 10^lamniformes_data[!lamniformes_data$genus %in% c("Alopias","Cetorhinus"),]$log_tl,
+    pred = 10^fitted(interSM3))$mean
+ppe(true = 10^lamniformes_data[lamniformes_data$family == "Lamnidae",]$log_tl,
+    pred = 10^fitted(interSM4))$mean
+```
+
+```{r fig.cap= "Log-space of lamniform centrum size vs the fossil specimens. This includes all 10 species for which data was available."}
+# Plot the log-space of all lamniforms vs the fossil specimens.
+bind_rows(
+  lamniformes_data |> select(log_cd) |> mutate(grp = "extant"),aptian_shark |> mutate(grp = "extinct")) |> 
+  ggplot(mapping = aes(x = log_cd, fill = grp)) +
+  geom_histogram(bins = 30, color = "black") +
+  scale_fill_manual(values = c("white","#E16A86")) +
+  # White shark.
+  geom_vline(xintercept = c(0.2379436,0.9315206),linetype = 2) +
+  # Basking shark.
+  geom_vline(xintercept = c(0.564525,1.181967),linetype = 2, col = "blue") +
+  labs(title = NULL,subtitle = NULL,
+       y = "Count",
+       x = "Centrum diameter (log10 cm)", fill = "Group") +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1,legend.position = "none")
+
+bind_rows(
+  tidy(interSM1,conf.int = T)[c(1:2,6:7)] |> mutate(model = "ML1"),
+  tidy(interSM2,conf.int = T)[c(1:2,6:7)] |> mutate(model = "ML2"),
+  tidy(interSM3,conf.int = T)[c(1:2,6:7)] |> mutate(model = "ML3"),
+  tidy(interSM4,conf.int = T)[c(1:2,6:7)] |> mutate(model = "ML4")
+) |> 
+  filter(term == "(Intercept)") |> 
+  as.data.frame() |> 
+  ggplot(mapping = aes(x = model, y = estimate)) +
+  geom_errorbar(aes(x = model, y = estimate,ymin = conf.low, ymax = conf.high),
+                width = 0.1, linewidth = 1, col = c("#3B7C70FF","#D01556FF","#CE9642FF","#25282AFF")) +
+  geom_point(shape = 21, fill = "white",size = .5) +
+  labs(y = "β1 (slope estimate)") +
+  # geom_hline(yintercept = 1, lty = 2) +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.position = "none",
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1)
+  
+lamniformes_data |> 
+  mutate(class = case_when(genus == "Alopias" ~ "Alopias",T ~ ""),
+         class = case_when(genus != "Alopias" ~ "Non-Alopias", T ~ genus)) |> 
+  ggplot(aes(x = log_cd, y = log_tl)) +
+  labs(title = NULL,subtitle = NULL,
+       y = "Total length (log10 cm)",
+       x = "Centrum diameter (log10 cm)", colour = "Species") +
+  annotation_logticks() +
+  geom_point(aes(colour = class),fill = "white",size = 2, shape = 21) +
+  scale_colour_manual(values = c("#2E2D29","#620059")) +
+  geom_abline(intercept = coef(interSM1)[1],slope = coef(interSM1)[2], col = "#3B7C70FF") +
+  geom_abline(intercept = coef(interSM2)[1],slope = coef(interSM2)[2], col = "#D01556FF") +
+  geom_abline(intercept = coef(interSM3)[1],slope = coef(interSM3)[2], col = "#CE9642FF") +
+  geom_abline(intercept = coef(interSM4)[1],slope = coef(interSM4)[2], col = "#25282AFF") +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.position = "none",
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1)
+```
+
+### Fossil Predictions (II)
+
+Total length predictions are here computed based on our intraspecific regression equations.
+
+```{r}
+# LM fits.
+species_fit <- 
+  lamniformes_data |> 
+  group_by(species) |> 
+  do(model = fit_regression(.))
+
+# Provide taxon names to each sub-list.
+for (i in seq_along(species_fit$model)) {
+  names(species_fit$model)[[i]] <- sort(species_fit$species)[i]
+}
+
+# Compute evaluation metrics.
+summary_stats <- 
+  matrix(nrow = 10,ncol = 2, dimnames = list(species_fit$species,c("MSE","R.squared")))
+
+for (i in 1:10) {
+  summary_stats[i,1] <- round(mean(summary(species_fit$model[[i]])$residuals^2),digits = 3)
+  summary_stats[i,2] <- round(summary(species_fit$model[[i]])$adj.r.squared,digits = 3)
+}
+
+# Predictions for the Darwin Formation vertebral centra based on extant species-level equations.
+species_prediction <- vector("list",length = 10)
+
+names(species_prediction) <- 
+  species_fit$species
+
+for(i in seq_along(species_fit$model)) {
+  preds <- predict(species_fit$model[[i]],newdata = aptian_shark, type = "response",interval = "prediction",level = .95)
+  species_prediction[[i]] <- 10^preds # anti-log
+}
+
+# Add specimen label.
+species_prediction <- purrr::map(species_prediction, ~as.data.frame(.x),.progress = T)
+species_prediction <- purrr::map(species_prediction, ~mutate(.x, specimens = c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29")))
+```
+
+#### Model performance and auxiliary results
+
+The performance of each species-level model is evaluated using the **Mean Absolute Error (MAE)**. This MAE is a measure of **goodness-of-fit** and represents the average absolute difference between the predicted (fitted) values and the actual target values (in this context TL).
+
+**MAE** is given by:
+
+$$MAE = \sum_{i=1}^n |y_i - x_i| \over n$$
+
+```{r}
+# Model performance by species.
+prepare_split <- 
+  lamniformes_data |> group_by(species)
+
+prepare_split_frame <- 
+  group_split(prepare_split) |> lapply(as.data.frame)
+
+QR <- vector("list", length = 10)
+
+for(i in seq_along(species_fit$model)) {
+  preds <- predict(species_fit$model[[i]],newdata = data.frame(log_cd = prepare_split_frame[[i]]$log_cd), type = "response",interval = "prediction",
+                   level = .95)
+  QR[[i]] <- preds
+}
+
+names(QR) <- species_fit$species
+
+# Add TL values for each species back to the predicted TL and CI dataframes. 
+predicted_actual_set <- lapply(seq_along(QR), function(x) {
+  lsName <- names(QR)[x]
+  log_tl <- lamniformes_data$log_tl[lamniformes_data$species == lsName]
+  cbind(QR[[x]], log_tl = log_tl)
+})
+
+names(predicted_actual_set) <- species_fit$species
+
+maeR <- predicted_actual_set |> lapply(as.data.frame)
+
+# MAE.
+lapply(maeR, function(x) { Metrics::mae(x$log_tl, x$fit) }) |> 
+  unlist() |> 
+  as.data.frame() |> 
+  setNames(nm = "mae") |> 
+  rownames_to_column(var = "species") |> 
+  mutate("mae" = round(mae,digits = 2)) # Similar to MAE results above.
+
+# PPE
+lapply(maeR, function(x) { MASSTIMATE::ppe(10^x$log_tl, 10^x$fit)$mean }) |> 
+  unlist() |> 
+  as.data.frame() |> 
+  setNames(nm = "PPE") |> 
+  rownames_to_column(var = "species") |> 
+  mutate("|PPE%|" = round(PPE,digits = 2))
+```
+
+#### Full GWS {#sec-gws}
+
+<!-- Analysis using all GWS records -->
+
+```{r fig.cap="Relationship between centrum diameter and total length in C. carcharias. Data is based on records from Wintner & Cliff (1999) and Cailliet et al. 1985. The estimated TL along with 95% prediction intervals of the cardabiodontid specimens are added to the graph", warning=FALSE}
+
+# Prediction intervals.
+gws_pi <- 
+  predict(object = slope_intercept$model[[5]],newdata = data.frame(log_cd = carcharodon_carcharias_complete$log_cd),
+          interval = "prediction") |> as.data.frame()
+# Plot.
+p2 <- 
+  carcharodon_carcharias_complete |> 
+  ggplot(mapping = aes(x = log_cd, y = log_tl)) +
+  geom_point(aes(colour = reference), shape = 19) +
+  annotation_logticks() +
+  scale_x_continuous(limits = c(min(carcharodon_carcharias_complete$log_cd),max(aptian_shark$log_cd)+0.02)) +
+  scale_y_continuous(limits = c(min(carcharodon_carcharias_complete$log_tl),log10(max(species_prediction$`Carcharodon carcharias`$upr)))) +
+  geom_smooth(method = "lm",se = F, colour = "black") +
+  ggpmisc::stat_poly_eq(use_label(c("eq", "adj.R2", "f", "p", "n")),
+                        size = 4.0,label.x = "left",label.y = "top",
+                        color = "black") +
+  scale_fill_manual(values = c("#E16A86","#08306b")) +
+  scale_color_manual(values = c("#E16A86","#08306b")) +
+  # Prediction intervals.
+  geom_line(aes(y = gws_pi[,"lwr"]), col = "black", linetype = "dashed") +
+  geom_line(aes(y = gws_pi[,"upr"]), col = "black", linetype = "dashed") +
+  # Add fossil predictions to base plot.
+  geom_point(data = aptian_shark,mapping = aes(x = log_cd, y = log10(species_prediction$`Carcharodon carcharias`$fit)),
+             colour = "black", fill = "white",pch = 22, size = 2) +
+  # Labels.
+  labs(x = "Centrum diameter (log10 cm)", y = "Total length (log10 cm)") +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.title = element_blank(),
+        aspect.ratio = 1)
+
+p3 <- p2 + 
+  geom_errorbar(data = species_prediction$`Carcharodon carcharias`, 
+                aes(x = aptian_shark$log_cd,y = log10(fit), ymin = log10(lwr),ymax = log10(upr))
+                ,color = "black")
+
+p3
+# PPE.
+complete_gws_ppe <-
+  ppe(true = 10^carcharodon_carcharias_complete$log_tl,
+      pred = 10^as.vector(fitted(slope_intercept$model[[5]])))
+```
+
+<!--Comparative species predictions-->
+
+```{r}
+data.frame(Reduce(rbind, species_prediction)) |>
+  as_tibble() |> 
+  mutate(taxon = rep(species_fit$species,each = 5)) |>
+  mutate(specimens = fct_relevel(specimens,c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29"))) |> 
+  as.data.frame() |> 
+  knitr::kable(caption = "Specimen-level predictions based on extant intraspecific regression equations (see Figure 15).") |> 
+  kableExtra::kable_styling()
+```
+
+```{r fig.cap = "Total length estimates of the Darwin Formation cardabiodontid shark. Individual panel corresponds to a unique specimen and show the estimated (back-transformed) values along with 95% prediction intervals generated from our lamniform species-level data subsets."}
+# Based on all lamniform species.
+data.frame(Reduce(rbind, species_prediction)) |>
+  as_tibble() |> 
+  mutate(taxon = rep(species_fit$species,each = 5)) |>
+  mutate(specimens = fct_relevel(specimens,c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29"))) |> 
+  # Plot.
+  ggplot(aes(y = taxon, x = fit, colour = taxon)) +
+  geom_errorbar(aes(xmin = lwr, xmax = upr),
+                width = 0.3, linewidth = 1.3,
+                position = position_dodge(width = 0.9)) +
+  geom_point(size = 2, fill = "white", shape = 21,
+             position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = col_vec) +
+  scale_color_manual(values = col_vec) +
+  coord_flip() +
+  facet_wrap(.~specimens,ncol = 5) +
+  labs(x = "Total length (cm)",y = "",
+       title = NULL,
+       subtitle = NULL,
+       color = "Models") +
+  theme_bw() +
+  theme(title = element_text(face = "bold"),
+        axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.position = "bottom",
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic",size = 8),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        strip.text = element_text(face = "bold"),
+        aspect.ratio = 1.8)
+```
+
+#### Lamnidae overview
+
+```{r message=FALSE,warning=FALSE}
+# Plot the log-space of C. carcharias centrum size vs the fossil specimens.
+bind_rows(lamnidae_data |> 
+  filter(species == "Carcharodon carcharias") |> 
+  select(log_cd,species,reference),aptian_shark |> mutate(species = "NTM P",reference = "NTM P")) |> 
+  ggplot(mapping = aes(x = log_cd, fill = reference)) +
+  geom_histogram(bins = 30) +
+  scale_fill_manual(values = c("#B83A4B","#2E2D29","#017E7C")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(face = "bold"),
+        axis.text.y = element_text(face = "bold",angle = 90,hjust = 0.5,vjust = .5),
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"),
+        legend.title = element_text(face = "bold"),
+        title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "plain"),
+        aspect.ratio = 1) +
+  labs(title = "Log-10 space",
+       subtitle = NULL,
+       x = "Centrum diameter (log10 cm)", y = "Count", fill = "")
+
+# Check for negative values.
+lamnidae_data |> 
+  select(species,contains("log_")) |>
+  filter(log_cd < 0.0)
+
+# Lamnidae species CD-TL relationship.
+lamnidae_data |> 
+  ggplot(aes(x = log_cd, y = log_tl)) +
+  geom_point(aes(colour =  species), fill = "white",size = 2, shape = 21) +
+  geom_smooth(aes(colour = species),method = "lm",show.legend = F,se = F) +
+  annotation_logticks() +
+  # Species colors.
+  scale_color_manual(values = c("#E76F51","#1D3557", "#F0A8C0FF", "#6D6875")) +
+  scale_fill_manual(values =  c("#E76F51","#1D3557", "#F0A8C0FF", "#6D6875")) +
+  labs(x = "Centrum diameter (log10 cm)",
+       y = "Total length (log10 cm)",
+       colour = "Taxa",
+       title = "Lamnidae",
+       subtitle = "Centrum diameter versus total length") +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1)
+```
+
+#### Residual analysis
+
+```{r}
+# Linear fit.
+lamnidae_model <- lm(log_tl ~ log_cd, lamnidae_data)
+
+# Average Z-score for predicted TL.
+zScores = mean((log10(pred_tl$fit) - mean(predict(lamnidae_model)))/sd(predict(lamnidae_model)))
+
+# Plot results.
+lamnidae_data |> 
+  ggplot(mapping = aes(x = predict(lamnidae_model))) +
+  geom_histogram(bins = 30, color = "black", fill = "white") +
+  #xlim(c(1.949668,4.080516)) +
+  geom_vline(xintercept = mean(predict(lamnidae_model)), linewidth = 1, linetype="dashed",colour = "#E16A86") +
+  geom_vline(xintercept = zScores, linewidth = 1, linetype="dashed", colour = "#08306b") +
+  # Two standard deviations around the mean.
+  # geom_vline(xintercept = c((lamnidae_mean - 2 * lamnidae_sd),(lamnidae_mean + 2 * lamnidae_sd)),colour = "black") +
+  labs(title = NULL,subtitle = NULL,
+       y = "Count",
+       x = "Predicted total length (log 10)") +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1,legend.position = "none")
+```
+
+#### Alopidae overview
+
+```{r warning=FALSE,message=FALSE}
+# Alopias log-space and Aptian specimens.
+bind_rows(alopiidae_data |> mutate(status = "Extant"), 
+          aptian_shark |> mutate(status = "Fossil")
+) |> 
+  ggplot(aes(x = log_cd, fill = status)) +
+  geom_histogram() +
+  scale_fill_manual(values = c("#E16A86","black")) +
+  theme(aspect.ratio = 1/3,
+        plot.title = element_text(face = "bold"),
+        axis.title = element_text(face = "bold")) +
+  labs(title = "Log-10 space", fill = NULL,
+       subtitle = "Alopias-species centrum diameter versus NTM P",
+       x = "Centrum diameter (log10, cm)", y = "Count")
+
+# Only Alopias species.
+alopiidae_data |> 
+  ggplot(aes(x = log_cd, y = log_tl)) +
+  geom_point(aes(color = species), fill = "white",size = 2, shape = 21) +
+  annotation_logticks() +
+  geom_smooth(aes(colour = species),method = "lm",show.legend = F,se = F) +
+  scale_color_manual(values = c("#264653", "#2A9D8F", "#E9C46A")) +
+  scale_fill_manual(values =  c("#264653", "#2A9D8F", "#E9C46A")) +
+  labs(title = "Alopiidae — Thresher sharks",subtitle = "Centrum diameter versus total length",
+       y = "Total length (log10 cm)",
+       x = "Centrum diameter (log10 cm)", colour = "Species") + 
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1)
+```
+
+### Fossil Predictions (III)
+
+Here we compute **TL** estimates based on our interspecific regression equations.
+
+```{r}
+# Predictions on interspecific models.
+IS.I <- 
+  cbind(
+  # Model 1.
+  10^predict(object = interSM1,newdata = aptian_shark,interval = "prediction"),
+  10^predict(object = interSM1,newdata = aptian_shark,interval = "confidence")[,2:3]) |> 
+  as.data.frame() |> 
+  unname() |> 
+  setNames(nm = c("fit",".pred_lower",".pred_upper",".conf_lower",".conf_upper")) |> 
+  mutate(specimen = c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29")) |> 
+  mutate(model = "Model I")
+
+IS.II <- 
+  cbind(
+  # Model 2.
+  10^predict(object = interSM2,newdata = aptian_shark,interval = "prediction"),
+  10^predict(object = interSM2,newdata = aptian_shark,interval = "confidence")[,2:3]) |> 
+  as.data.frame() |> 
+  unname() |> 
+  setNames(nm = c("fit",".pred_lower",".pred_upper",".conf_lower",".conf_upper")) |> 
+  mutate(specimen = c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29")) |> 
+  mutate(model = "Model II")
+
+IS.III <-
+  cbind(
+  # Model 3.
+  10^predict(object = interSM3,newdata = aptian_shark,interval = "prediction"),
+  10^predict(object = interSM3,newdata = aptian_shark,interval = "confidence")[,2:3]) |> 
+  as.data.frame() |> 
+  unname() |> 
+  setNames(nm = c("fit",".pred_lower",".pred_upper",".conf_lower",".conf_upper")) |> 
+  mutate(specimen = c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29")) |> 
+  mutate(model = "Model III")
+
+IS.IIII <-
+  cbind(
+  # Model 4.
+  10^predict(object = interSM4,newdata = aptian_shark,interval = "prediction"),
+  10^predict(object = interSM4,newdata = aptian_shark,interval = "confidence")[,2:3]) |> 
+  as.data.frame() |> 
+  unname() |> 
+  setNames(nm = c("fit",".pred_lower",".pred_upper",".conf_lower",".conf_upper")) |> 
+  mutate(specimen = c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29")) |> 
+  mutate(model = "Model IV")
+
+# Plot results.
+bind_rows(IS.I,IS.II,IS.III,IS.IIII) |> 
+  mutate(specimen = fct_relevel(specimen,c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29"))) |> 
+  # Plot.
+  ggplot(aes(y = model, x = fit, colour = model)) +
+  geom_errorbar(aes(xmin = .pred_lower, xmax = .pred_upper),
+                width = 0.3, linewidth = 1.3,
+                position = position_dodge(width = 0.9)) +
+  geom_point(size = 2, fill = "white", shape = 21,
+             position = position_dodge(width = 0.9)) +
+  coord_flip() +
+  
+  scale_fill_manual(values =  c("#3B7C70FF","#D01556FF","#CE9642FF","#25282AFF")) +
+  scale_color_manual(values = c("#3B7C70FF","#D01556FF","#CE9642FF","#25282AFF")) +
+  facet_wrap(.~specimen,ncol = 5) +
+  labs(x = "Total length (cm)",y = "",
+       title = NULL,
+       subtitle = NULL,
+       color = "Interspecific models") +
+  theme_bw() +
+  theme(title = element_text(face = "bold"),
+        axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.position = "bottom",
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(size = 7),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        strip.text = element_text(face = "bold"),
+        aspect.ratio = 1.8)
+
+# intervals(xvar = IS.IIII$fit)[c(1,7:8)]
+```
+
+## Mesozoic data
+
+```{r message=FALSE, warning=FALSE}
+# Minor feature engineering.
+mesozoic_data_subset <- 
+  mesozoic_data |> 
+  mutate(log_cd = log10(centrum_diameter),
+         log_tl = log10(total_length)) |> 
+  filter(species != "Cardabiodon ricki")
+
+# Visualize.
+meso_01 <-
+  mesozoic_data_subset |> 
+  ggplot(aes(x = log_cd, y = log_tl, color = family)) +
+  geom_point() +
+  geom_smooth(aes(fill = family),method = "lm", se = F, color = "#08306b") +
+  scale_fill_manual(values =  c("#D01556FF","#175E54")) +
+  scale_color_manual(values = c("#D01556FF","#175E54")) +
+  stat_poly_eq(use_label(c("eq", "adj.R2", "f", "p", "n")),
+               size = 4.0,label.x = "left",label.y = "top") +
+  # geom_smooth(method = "rlm", se = FALSE, color = "#027EB6",linetype = 2) + 
+  labs(x = "Centrum diameter (log10 cm)",
+       y = "Total length (log10 cm)") +
+  geom_label_repel(aes(label = label),size = 2,
+                  box.padding = unit(0.35, "lines"),
+                  point.padding = unit(0.5, "lines"),
+                  segment.color = 'grey50') + 
+  # facet_wrap(.~family, scale = "free") +
+  theme_bw() +
+  theme(title = element_text(face = "bold"),
+        axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.x = element_text(hjust = 1,vjust = 1),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.title = element_text(face = "bold"),
+        legend.position = "none",
+        aspect.ratio = 1)
+
+# Fit linear model.
+stem_fit_01 <- lm(log_tl ~ log_cd, data = mesozoic_data_subset)
+stem_fit_02 <- lm(log_tl ~ log_cd, data = mesozoic_data_subset,subset = mesozoic_data_subset$family == "non-Anacoracidae")
+# stem_fit |> summary()
+
+# OLS prediction.
+pred_stem_ols_01 <- 
+  10^predict(stem_fit_01, newdata = aptian_shark,interval = "prediction",level = 0.95) |> 
+  bind_cols(specimen = c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29")) |> 
+  as.data.frame() |> 
+  add_column(status = rep("OLS: complete data",5))
+
+pred_stem_ols_02 <- 
+  10^predict(stem_fit_02, newdata = aptian_shark,interval = "prediction",level = 0.95) |> 
+  bind_cols(specimen = c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29")) |> 
+  as.data.frame() |> 
+  add_column(status = rep("OLS: non-Anacoracidae",5))
+
+# Compare OLS vs RLM prediction results.
+stem_all_predictions <- 
+  bind_rows(pred_stem_ols_01,pred_stem_ols_02) |> 
+  reshape::melt(c("fit","lwr","upr","specimen","status"))
+
+# Plot.
+meso_02 <- stem_all_predictions |> 
+  ggplot(aes(y = specimen, x = fit, colour = status)) +
+  geom_errorbar(aes(xmin = lwr, xmax = upr),
+                width = 0.3, linewidth = 1.3,
+                position = position_dodge(width = 0.9)) +
+  geom_point(size = 3, fill = "white", shape = 21,
+             position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values =  c("#08306b","#D01556FF")) +
+  scale_color_manual(values = c("#08306b","#D01556FF")) +
+  geom_vline(xintercept = c(514.3853,695.5629), col = c("#08306b","#D01556FF"), linetype = c(2,2)) + 
+  theme_bw() +
+  labs(x = "Total length (cm)",y = "", color = "Model") +
+  theme(legend.position = "none",
+        title = element_text(face = "bold"),
+        plot.subtitle = element_text(face = "plain"),
+        strip.text = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text = element_text(size = 8),
+        axis.title.x = element_text(vjust = -3),
+        plot.caption = element_text(hjust = 0),
+        aspect.ratio = 1)
+  # facet_wrap(~factor(specimen,c("NTM P922-32","NTM P922-29",
+  #                               "NTM P 922-37","NTM P 922-33")),scales = "free_y",ncol = 2)
+
+ggarrange(meso_01,meso_02,ncol = 2,align = "hv")
+```
+
+## Phylogenetic least squares
+
+<!--Tree from Stein et al. 2018. Downloaded from: https://vertlife.org/sharktree/-->
+
+<!--Using maximum size; weighted approach or within-group fit -->
+
+```{r}
+# Genetic Data Only Tree.
+sgtree <- phytools::readNexus(file = "phylogeny/500treePLtrees.nex")
+
+# MCC Tree.
+mcc_sgTree <- phangorn::maxCladeCred(x = sgtree,rooted = T)
+
+# Compute trait averages per species.
+grp_average <- 
+  lamniformes_data |>
+  group_by(species) |>
+  summarise(ave_tl = mean(log_tl),ave_cd = mean(log_cd)) |> 
+  as.data.frame()
+
+grp_max <- 
+  lamniformes_data |>
+  group_by(species) |>
+  summarise(ave_tl = max(log_tl),ave_cd = max(log_cd)) |> 
+  as.data.frame()
+
+rownames(grp_average) <- grp_average$species
+
+grp_average_clean <- data.frame(CD = setNames(grp_average$ave_cd,gsub(" ", "_", grp_average$species)),
+                                TL = setNames(grp_average$ave_tl,gsub(" ", "_", grp_average$species)),
+                                species = gsub(" ", "_", grp_average$species))
+
+# Drop tips.
+lamn_tree <- geiger::treedata(phy = mcc_sgTree,data = grp_average_clean, warnings = FALSE)$phy
+lamn_tree |> 
+  plot(); axisPhylo(1) 
+
+# PGLS (via RRPP).
+grp_pgls <- rrpp.data.frame(CD = setNames(grp_average_clean$CD,gsub(" ", "_", grp_average_clean$species)),
+                            TL = setNames(grp_average_clean$TL,gsub(" ", "_", grp_average_clean$species)),
+                            species = gsub(" ", "_", grp_average_clean$species),
+                            ecology = c(rep("macrophagous",5),rep("filter-feeding",1),rep("macrophagous",4)))
+
+grp_pgls$Cov <- vcv.phylo(lamn_tree)
+
+pgls_shark <- lm.rrpp(f1 = TL ~ CD,data = grp_pgls, Cov = grp_pgls$Cov,  print.progress = FALSE)
+# pgls_shark |> anova()
+nonPhylo_shark <- lm.rrpp(f1 = TL ~ CD,data = grp_pgls,  print.progress = FALSE)
+
+model.comparison(pgls_shark,nonPhylo_shark,type = "logLik")
+
+# Generalized Least-Squares (via OLS projection)
+# tree_ggplot <- 
+#   ggtree(lamn_tree) + 
+#   geom_tiplab(as_ylab=TRUE, color='black') +
+#   theme(aspect.ratio = 1)
+
+pgls_plot <- 
+  data.frame(cd = grp_average_clean$CD,
+           tl = grp_average_clean$TL,
+           labels = grp_average_clean$species) |> 
+  ggplot(aes(x = cd,y = tl)) +
+  geom_point(fill = "black",size = 2, shape = 21) +
+  geom_text_repel(aes(label = labels),
+                  size = 4,
+                  box.padding = unit(0.35, "lines"),
+                  point.padding = unit(0.3, "lines")) +
+  labs(
+       y = "Average total length (log10)",
+       x = "Average centrum diameter (log10)") +
+  annotation_logticks() +
+  geom_abline(intercept = coef(pgls_shark)[1], slope = coef(pgls_shark)[2], color = "#B2182B") +
+  geom_abline(intercept = coef(nonPhylo_shark)[1], slope = coef(nonPhylo_shark)[2], color = "blue") +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.position = "none",
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(face = "italic"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1)
+
+# Signal including Blombergs K and Effect Size.
+zCD <- geomorph::physignal.z(A = setNames(grp_average_clean[,"CD"],gsub(" ","_",grp_average_clean$species)),
+                             phy = lamn_tree,lambda = "front", iter=999)[1]
+
+zTL <- geomorph::physignal.z(A = setNames(grp_average_clean[,"TL"],gsub(" ","_",grp_average_clean$species)),
+                             phy = lamn_tree,lambda = "front", iter=999)[1]
+
+set.seed(1)
+
+cbind(
+  # Blomberg K.
+  phytools::phylosig(tree = lamn_tree,
+                     x = setNames(grp_average_clean[,"CD"],gsub(" ","_",grp_average_clean$species)),
+                     test = T)[1:2] |> unlist(),
+  phytools::phylosig(tree = lamn_tree,
+                     x = setNames(grp_average_clean[,"TL"],gsub(" ","_",grp_average_clean$species)),
+                     test = T)[1:2] |> unlist()
+) |> 
+  magrittr::set_colnames(c("CD", "TL")) |>
+  as.data.frame() |> 
+  add_row(CD = unlist(unname(zCD)), TL = unlist(unname(zTL))) |> 
+  t() |> 
+  magrittr::set_colnames(c("K", "P","Z")) |> 
+  knitr::kable(caption = "Table X. Phylogenetic signal in CD and TL") |>
+  kableExtra::kable_styling()
+```
+
+## Modern body-size ranges
+
+```{r message=FALSE, warning=FALSE}
+# Body size ranges.
+size_trait <- 
+  openxlsx::read.xlsx(xlsxFile = "lamniformes-body-ranges.xlsx") |> 
+  mutate(min = as.numeric(min),
+         max = as.numeric(max))
+
+rownames(size_trait) <- size_trait$species
+
+bzR <- data.frame(min = setNames(size_trait$min, size_trait$species),
+                  max = setNames(size_trait$max, size_trait$species),
+                  species = size_trait$species)
+
+# Complete lamniform tree.
+lamniformTree <- geiger::treedata(phy = mcc_sgTree,data = bzR, warnings = FALSE)$phy # 14 lamnifom taxa
+
+xe <- c(setNames(size_trait$min, size_trait$species),
+        setNames(size_trait$max, size_trait$species)
+        )
+
+xt <- xe[order(names(xe))][-c(25:26)] # Remove Odontaspis_ferox (Missing from tree)
+
+# Plot.
+par(mfrow=c(1,2))
+plotTree(lamniformTree,mar=c(5.1,1.1,2.1,0.1)); axisPhylo(1) 
+par(mar=c(5.1,0.1,2.1,1.1))
+boxplot(xt~factor(names(xt),levels=lamniformTree$tip.label),horizontal=TRUE,xlab = "Body size (cm)",
+    axes=F,xlim=c(1,Ntip(lamniformTree)))
+
+axis(1)
+```
+
+## GWS vertebrae counts
+
+$$Y_i \sim \text{Poisson}(\lambda_i)$$
+
+```{r warning=FALSE}
+# Plot data
+gws_long_format <- 
+  bind_rows(natanson_data[[3]],natanson_data[[4]],
+              natanson_data[[5]],natanson_data[[6]]) |> 
+  janitor::clean_names()
+
+column_label <- tibble(
+  vertebrae = Inf,
+  lateral_diameter_mm = Inf,
+  specimen = unique(gws_long_format$specimen),
+  label = c("Column specimen 144.9 cm FL, Male",
+            "Column specimen 152.0 cm FL, Male",
+            "Column specimen 380.9 cm FL, Male",
+            "Column specimen 331.0 cm FL, Male"),
+  x.pos = c(25,25,30,25),
+  y.pos = c(15.0,19.0,50,40))
+
+largest_centra <- gws_long_format |> 
+  group_by(specimen) |> 
+  slice_max(lateral_diameter_mm,na_rm = T) |> 
+  ungroup()
+
+gws_long_format |> 
+  ggplot(aes(x = vertebrae, y = lateral_diameter_mm)) + 
+  geom_point(shape = 21, fill = "white", color = "black", size = 1.5) +
+  labs(y = "Lateral diameter (mm)", x = "Vertebral number",
+       title = NULL,
+       subtitle = NULL) +
+  facet_wrap(.~specimen,scales = "free") +
+  geom_text(data = column_label,mapping = aes(x = x.pos, y = y.pos, label = label),size = 3, color = "black") +
+  theme_bw() +
+  theme(axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        strip.text = element_text(face = "bold"),
+        plot.title = element_text(face = "bold",size = 12),
+        plot.subtitle = element_text(size = 10),
+        aspect.ratio = 1)
+
+# Four specimens with size, vertebrae count, and centrum diameter.
+gws_natanson <-
+  data.frame(n_ver = lapply(natanson_data, nrow)[3:6] |> unlist(),
+             max_d = lapply(natanson_data, function(x) max(x[[2]],na.rm = T))[3:6] |> unlist()/10,
+             max_t = lapply(natanson_data, function(x) max(x[[3]],na.rm = T))[3:6] |> unlist()/10,
+             fl_cm = lapply(natanson_data, function(df) df[[4]][1])[3:6] |> unlist(),
+             sex = c("Male","Male","Male","Male"))
+
+gws_natanson_log <- 
+  cbind(gws_natanson[,1],apply(gws_natanson[,2:4],2,log10)) |>
+  as.data.frame() |>
+  rename("n_ver" = V1)
+
+# Poisson model.
+pos_model <- glm(n_ver ~ fl_cm + max_d + max_t, family = "poisson",data = gws_natanson_log)
+
+tidy(pos_model,conf.int = TRUE) |> 
+  knitr::kable(caption = "GLM results") |>
+  kable_styling(bootstrap_options = "striped",full_width = F)
+
+# Correlation test.
+cor(gws_natanson$n_ver,gws_natanson$max_d,method = "spearman")
+cor(gws_natanson$n_ver,gws_natanson$fl_cm,method = "spearman")
+cor(gws_natanson$max_d,gws_natanson$fl_cm,method = "spearman")
+cor(gws_natanson$max_t,gws_natanson$fl_cm,method = "spearman")
+```
+
+## Re-estimating extinct species
+
+**OMNH 68860: CD = 11 cm)** -- Original estimate by [@Frederickson2015] was 630 and 660 cm TL.
+
+**FHSM VP-2187 (CD = 8.7 cm):** -- Original estimate by [@Shimada1997b] was 500 cm Tl. Refined estimate by Newbrey et al. of 5.3 m.
+
+```{r warning=FALSE, message=FALSE}
+# First use the regression equation by Gottfried et al. (1996) to confirm the result in Frederickson et al. 2015.
+# The CD here is in mm units and result in m.
+0.22 + 0.058 * 110
+
+# Use Lamnidae interspecific model to re-estimate the TL.
+10^predict(object = interSM4,newdata = data.frame(log_cd = log10(11.0)),interval = "prediction")
+10^predict(object = interSM4,newdata = data.frame(log_cd = log10(8.7)), interval = "prediction")
+
+# Cretaceous lamniform species.
+stem_species <- 
+  data.frame(log_cd = log10(mesozoic_data$centrum_diameter/10))
+
+10^predict(object = interSM4,newdata = stem_species,interval = "prediction") |> 
+  data.frame() |> 
+  add_column("specimen" = mesozoic_data$label) |> 
+  mutate(CD= mesozoic_data$centrum_diameter/10) |> 
+  add_row(fit = 718.7564, lwr = 608.9134, upr = 848.4143,specimen = "NTM P 922-32", CD = 12.6) |> 
+  # Order by age
+  mutate(specimen = factor(specimen, levels = c("NTM P 922-32","OMNH 68860","KUVP 16343","WAM 96.4.45.108",
+                                                "IGVR 91032","MPPSA-IGVR 36371","FHSM VP-2187","MSNPV 20407–20417",
+                                                "LACM 128126","USNM 425665","LACM 135929","LACM 143537",
+                                                "LACM 120090","SDSM 34975","SDSM 47682","SDSM 47683"))) |> 
+  ggplot(aes(x = specimen, y = fit)) +
+  geom_errorbar(aes(ymin = lwr, ymax = upr),
+                width = 0.1,linewidth = 1.3) +
+  geom_point(size = 3, shape = 19,colour = "black") +
+  # Original points.
+  geom_point(data = mesozoic_data,aes(x = label, y = total_length/10), size = 3, shape = 19, colour = "#B83A4B") +
+  # CD label.
+  #geom_text(aes(x = specimen, y = fit + 200, label = paste0("CD=",as.character(CD),"cm")),size = 6, col = "black") +
+  geom_rect(xmin = 0.7, xmax = 1.3, ymin = 600, ymax = 870,lty = 2,alpha = 0, color = "black") +
+  # ‘small,’ 1‒200 cm; ‘medium,’ 201‒400 cm; ‘large,’ 401‒600 cm; and ‘gigantic,’ >600 cm). 
+  geom_hline(yintercept = c(201,400,600), lty = c(2,2,1), col = "#08306b") +
+  theme_bw() +
+  labs(x = NULL, y = "Estimated total length (cm)",title = NULL) +
+  theme(title = element_text(face = "bold"),
+        axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.x = element_text(hjust = 1,vjust = 1,angle = 45),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.title = element_text(face = "bold"),
+        plot.title = element_text(face = "bold",size = 12),
+        aspect.ratio = 1/2)
+```
+
+**IRSNB 3121**
+
+```{r results='hide'}
+# Carcharocles megalodon.
+cooper_megladon <- 
+  openxlsx::read.xlsx(xlsxFile = "data/Cooper et al. 2022.xlsx",sheet = 1) |> 
+  rename("Diameter" = 9) |> 
+  mutate(Diameter = Diameter/10) |> 
+  mutate(log_cd = log10(Diameter)) |>  
+  dplyr::select(log_cd)
+
+# Predictions (using C. carcharias as the reference)
+meg_fit1 <- 
+  10^predict(object = length_linear_fit_ols,newdata = data.frame(log_cd = cooper_megladon$log_cd),interval = "prediction") |> 
+  as.data.frame() |>
+  ggplot(aes(x = 1:141,y = fit)) +
+  geom_errorbar(aes(ymin = lwr, ymax = upr), color = "#014240") +
+  geom_point(color = "#014240", fill = "white", shape = 21) +
+  scale_y_continuous(limits = c(100,1200)) +
+  geom_hline(yintercept = c(920,1110), linewidth = 1.2,
+             color = c("#CA0020","#5D4B3C")) +
+  labs(x = "Vertebrae (IRSNB 3121)", y = "Total length (TL, cm)",
+       title = "Otodus megalodon",
+       subtitle = "C. carcharias as the reference species",
+       caption = "") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold.italic"),
+        axis.title = element_text(face = "bold"),
+        axis.text.y = element_text(angle = 90,hjust = 1,vjust = 1),
+        aspect.ratio = 1)
+
+round(100 - (1021.1817/100)/11.1 * 100,digits = 2) # 8% difference between regression-model estimate and minimum column length of 11.1 m.
+
+# Predictions (using Lamnna nasus as the reference)
+meg_fit2 <-
+  10^predict(object = slope_intercept$model[[9]],newdata = data.frame(log_cd = cooper_megladon$log_cd),interval = "prediction") |> 
+  as.data.frame() |> 
+  ggplot(aes(x = 1:141,y = fit)) +
+  geom_errorbar(aes(ymin = lwr, ymax = upr), color = "#014240") +
+  geom_point(color = "#014240", fill = "white", shape = 21) +
+  scale_y_continuous(limits = c(100,1200)) +
+  geom_hline(yintercept = c(1110), linewidth = 1.2,
+             color = c("#5D4B3C")) +
+  labs(x = "Vertebrae (IRSNB 3121)", y = "Total length (TL, cm)",
+       title = "Otodus megalodon",
+       subtitle = "Lamna nasus as the reference species",
+       caption = "") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold.italic"),
+        axis.title = element_text(face = "bold"),
+        axis.text.y = element_text(angle = 90,hjust = 1,vjust = 1),
+        aspect.ratio = 1)
+
+# Predictions (using interspecific model)
+10^predict(object = interSM4,newdata = data.frame(log_cd = cooper_megladon$log_cd),interval = "prediction") |> 
+  as.data.frame() |> 
+  ggplot(aes(x = 1:141,y = fit)) +
+  geom_errorbar(aes(ymin = lwr, ymax = upr), color = "#08306b") +
+  geom_point(color = "#08306b", fill = "white", shape = 21) +
+  scale_y_continuous(limits = c(100,1200)) +
+  geom_hline(yintercept = c(1110), linewidth = 1.2,
+             color = c("#B2182B")) +
+  labs(x = "Vertebrae (IRSNB 3121)", y = "Total length (TL, cm)",
+       title = "Otodus megalodon",
+       subtitle = "",
+       caption = "") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold.italic"),
+        axis.title = element_text(face = "bold"),
+        axis.text.y = element_text(angle = 90,hjust = 1,vjust = 1),
+        aspect.ratio = 1)
+```
+
+## Body size evolution
+
+```{r results='hide'}
+shimada <- 
+  openxlsx::read.xlsx(xlsxFile = "data/Shimada et al. 2021.xlsx") |> 
+  mutate(TL = as.numeric(TL),
+         Min = as.numeric(Min),
+         Max = as.numeric(Max))
+
+bzE <- ggplot(shimada) + 
+  geom_segment(aes(x = Min, xend = Max, y = Genus, yend = Genus), linewidth = 1) +
+  # geom_point(aes(x = (Min + Max) / 2, y = Genus, size = TL), color = "red") 
+  geom_point(aes(x = (Min + Max) / 2, y = Genus, size = TL, color = TL >= 500), show.legend = T) +
+  scale_color_manual(values = c("#006B81", "#B83A4B")) +
+  labs(title = "Lamniform body size evolution", subtitle = "Estimated maximum possible total body length", x = "Geological Age (Ma)", y = NULL) +
+  # geom_vline(xintercept = c(149.2,145.0,139.8,132.6,125.77,121.4,113.0,100.5,93.9,89.8,86.3,83.6,72.1,66.0,61.6,59.2,56.0,47.8,41.2,37.71,33.9,
+  #                           27.82,23.03,20.44,15.98,13.82,11.63,7.246,5.333,3.600,2.58,1.80,0.774,0.129,0.0117,0.0), col = "black") +
+  # geom_vline(xintercept = c(145.0,100.5,66.0,56.0,33.9,23.03,5.333,2.58,0.0117), col = "red") +
+  geom_vline(xintercept = 66.0, col = "red") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(face = "bold"))
+
+bzEe <- shimada |> 
+  filter(TL >= 450) |> 
+  ggplot() + 
+  geom_segment(aes(x = Min, xend = Max, y = Genus, yend = Genus), linewidth = 1) +
+  geom_point(aes(x = (Min + Max) / 2, y = Genus, size = TL), color = "red") +
+  labs(title = "Lamniform body size evolution", subtitle = "Estimated maximum possible total body length", x = "Geological Age (Ma)", y = NULL) +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold"),
+        axis.text = element_text(face = "bold"),
+        axis.title = element_text(face = "bold"))
+```
+
+## Download data
+
+{{< downloadthis data/sharkData.xlsx dname="Lamniform shark data" label="Download lamniform data used in this study as .xlsx" icon="file-earmark-spreadsheet" type="success" >}}
+
+## References
+
+```{r}
+
+```
+
