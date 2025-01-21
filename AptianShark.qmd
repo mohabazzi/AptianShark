@@ -55,7 +55,7 @@ editor_options:
 R.packages <- c("ozmaps ggpubr ggspatial dplyr openxlsx ggplot2 tidyr
                  purrr readxl kableExtra knitr gtsummary gt MASS broom 
                  smatr MASSTIMATE ggpmisc ggrepel smatr performance downloadthis
-                 rempsyc car forcats RRPP caper geiger phangorn lmtest 
+                 rempsyc car forcats RRPP caper geiger phangorn lmtest randomForest
                  MuMIn phytools conflicted tibble irr nlme ggdist dockerfiler")
 
 import_packages <- 
@@ -1983,7 +1983,7 @@ cbind(
 ```{r message=FALSE, warning=FALSE}
 # Body size ranges.
 size_trait <- 
-  openxlsx::read.xlsx(xlsxFile = "lamniformes-body-ranges.xlsx") |> 
+  openxlsx::read.xlsx(xlsxFile = "data/lamniformes-body-ranges.xlsx") |> 
   mutate(min = as.numeric(min),
          max = as.numeric(max))
 
@@ -2247,9 +2247,7 @@ bzEe <- shimada |>
 
 ## Ecology classification
 
-```{r}
-library(randomForest)
-
+```{r message=FALSE,warning=FALSE}
 macro_ecology <- 
   lamniformes_data |> 
   mutate(ecology = case_when(species == "Cetorhinus maximus" ~ "Microphagous", T ~ "Macrophagous")) |> 
