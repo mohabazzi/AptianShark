@@ -46,7 +46,7 @@ editor_options:
 ## Docker Workflow and Github Action
 
 ```{r message=FALSE}
-workflow <- rworkflows::use_workflow()
+
 ```
 
 ## Libraries
