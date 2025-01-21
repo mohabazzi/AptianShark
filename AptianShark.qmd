@@ -51,12 +51,12 @@ editor_options:
 
 ## Libraries
 
-```{r message=FALSE, results='hide',warning=FALSE}
+```{r message=FALSE,results='hide',warning=FALSE}
 R.packages <- c("ozmaps ggpubr ggspatial dplyr openxlsx ggplot2 tidyr
                  purrr readxl kableExtra knitr gtsummary gt MASS broom 
                  smatr MASSTIMATE ggpmisc ggrepel smatr performance downloadthis
                  rempsyc car forcats RRPP caper geiger phangorn lmtest 
-                 MuMIn phytools conflicted tibble irr nlme ggdist rworkflows")
+                 MuMIn phytools conflicted tibble irr nlme ggdist dockerfiler")
 
 import_packages <- 
   function(x)
@@ -451,11 +451,12 @@ mesozoic_data |>
 
 {{< pagebreak >}}
 
+<br/>
+
 ### ME Error
 
 ```{r}
-icc_results <-
-  bind_rows(
+bind_rows(
     icc_custom(path = "data/Liu et al. 1999.xlsx") |> mutate(species = "Alopias pelagicus"),
     icc_custom(path = "data/Liu et al. 1998.xlsx") |> mutate(species = "Alopias superciliosus"),
     icc_custom(path = "data/Cailliet et al. 1983.xlsx") |> mutate(species = "Alopias vulpinus"),
@@ -466,7 +467,9 @@ icc_results <-
     icc_custom(path = "data/Kindong et al. 2020.xlsx") |> mutate(species = "Pseudocarcharias kamoharai")
   ) |> 
   mutate_at(.vars = "p-value",.funs = ~round(.x,digits = 3)) |> 
-  mutate(interpretation = case_when(value >= 0.9 ~ "Excellent agreement",TRUE ~ ""))
+  mutate(interpretation = case_when(value >= 0.9 ~ "Excellent agreement",TRUE ~ "")) |> 
+  kable() |> 
+  kable_styling(bootstrap_options = "striped",full_width = F)
 ```
 
 ## Linear regression
@@ -499,6 +502,8 @@ aov(formula = log_tl~log_cd*sex,data = carcharodon_carcharias_wintner) |>
   knitr::kable(caption = "Factorial anova test") |>
   kable_styling(bootstrap_options = "striped",full_width = F)
 ```
+
+<br/>
 
 ### Model fit I (TL)
 
@@ -597,6 +602,8 @@ kable(nice_assumptions(model = length_linear_fit_ols), col.format.p = 2:4,
                  P-values < .05 imply assumptions are not respected.") |>
   kable_styling(bootstrap_options = "striped",full_width = T)
 ```
+
+<br/>
 
 ### Model fit II (BM)
 
@@ -978,7 +985,7 @@ p <-
         aspect.ratio = 1)
 
 # Add error bars.
-p + 
+p0 <- p + 
   geom_errorbar(data = tl_intervals, aes(x = log_cd,y = fit, ymin = .pred_lower,ymax = .pred_upper),
                 width = 0.02,color = "black")
 ```
@@ -1043,7 +1050,7 @@ p1 <-
         aspect.ratio = 1)
 
 # Add error bars.
-p1 + 
+p01 <- p1 + 
   geom_errorbar(data = mass_intervals, aes(x = log_cd,y = fit, ymin = .pred_lower,ymax = .pred_upper),
                 width = 0.02,color = "black")
 ```
@@ -1196,7 +1203,9 @@ unqiue_slope <- lm.rrpp(log_tl ~ log_cd * species, data = lamniformes_data) # he
 
 # Which model is better?
 # anova(common_slope,unqiue_slope,print.progress = F)$table
-model.comparison(common_slope,unqiue_slope,type = "logLik")
+model.comparison(common_slope,unqiue_slope,type = "logLik")$table |> 
+  kable() |> 
+  kable_styling()
 
 # To work with emmeans.
 unqiue_slope_em <- lm(log_tl ~ log_cd * species, data = lamniformes_data) # heterogeneity of slopes test (iteraction model)
@@ -1248,6 +1257,8 @@ summary(PW, test.type = "dist", confidence = 0.95, stat.table = TRUE)$summary.ta
   kable_styling()
 ```
 
+<br/>
+
 #### Interspecific models
 
 `ML1` -- Interspecific model that includes all sampled lamniform species.
@@ -1272,13 +1283,14 @@ interSM4 <- lm(log_tl ~ log_cd, data = lamniformes_data[lamniformes_data$family 
 # tidy(interSM4,conf.int = T)
 
 # PPE.
-ppe(true = 10^lamniformes_data$log_tl,pred = 10^fitted(interSM1))$mean
-ppe(true = 10^lamniformes_data[!lamniformes_data$genus == "Alopias",]$log_tl,
-    pred = 10^fitted(interSM2))$mean
-ppe(true = 10^lamniformes_data[!lamniformes_data$genus %in% c("Alopias","Cetorhinus"),]$log_tl,
-    pred = 10^fitted(interSM3))$mean
-ppe(true = 10^lamniformes_data[lamniformes_data$family == "Lamnidae",]$log_tl,
+c(ppe(true = 10^lamniformes_data$log_tl,pred = 10^fitted(interSM1))$mean,
+  ppe(true = 10^lamniformes_data[!lamniformes_data$genus == "Alopias",]$log_tl,
+    pred = 10^fitted(interSM2))$mean,
+  ppe(true = 10^lamniformes_data[!lamniformes_data$genus %in% c("Alopias","Cetorhinus"),]$log_tl,
+    pred = 10^fitted(interSM3))$mean,
+  ppe(true = 10^lamniformes_data[lamniformes_data$family == "Lamnidae",]$log_tl,
     pred = 10^fitted(interSM4))$mean
+)
 ```
 
 ```{r fig.cap= "Log-space of lamniform centrum size vs the fossil specimens. This includes all 10 species for which data was available."}
@@ -1440,7 +1452,9 @@ lapply(maeR, function(x) { Metrics::mae(x$log_tl, x$fit) }) |>
   as.data.frame() |> 
   setNames(nm = "mae") |> 
   rownames_to_column(var = "species") |> 
-  mutate("mae" = round(mae,digits = 2)) # Similar to MAE results above.
+  mutate("mae" = round(mae,digits = 2)) |> 
+  kable() |> 
+  kable_styling()
 
 # PPE
 lapply(maeR, function(x) { MASSTIMATE::ppe(10^x$log_tl, 10^x$fit)$mean }) |> 
@@ -1448,14 +1462,16 @@ lapply(maeR, function(x) { MASSTIMATE::ppe(10^x$log_tl, 10^x$fit)$mean }) |>
   as.data.frame() |> 
   setNames(nm = "PPE") |> 
   rownames_to_column(var = "species") |> 
-  mutate("|PPE%|" = round(PPE,digits = 2))
+  # mutate("|PPE%|" = round(PPE,digits = 2)) |> 
+  kable() |> 
+  kable_styling()
 ```
 
 #### Full GWS {#sec-gws}
 
 <!-- Analysis using all GWS records -->
 
-```{r fig.cap="Relationship between centrum diameter and total length in C. carcharias. Data is based on records from Wintner & Cliff (1999) and Cailliet et al. 1985. The estimated TL along with 95% prediction intervals of the cardabiodontid specimens are added to the graph", warning=FALSE}
+```{r fig.cap="Relationship between centrum diameter and total length in C. carcharias. Data is based on records from Wintner & Cliff (1999) and Cailliet et al. 1985. The estimated TL along with 95% prediction intervals of the cardabiodontid specimens are added to the graph", warning=FALSE, message=FALSE}
 
 # Prediction intervals.
 gws_pi <- 
