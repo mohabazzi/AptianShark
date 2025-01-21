@@ -43,6 +43,13 @@ editor_options:
   chunk_output_type: console
 ---
 
+## Workflow
+
+```{r}
+# Workflow file
+path <- rworkflows::use_workflow()
+```
+
 ## Libraries
 
 ```{r message=FALSE, results='hide',warning=FALSE}
@@ -50,7 +57,7 @@ R.packages <- c("ozmaps ggpubr ggspatial dplyr openxlsx ggplot2 tidyr
                  purrr readxl kableExtra knitr gtsummary gt MASS broom 
                  smatr MASSTIMATE ggpmisc ggrepel smatr performance downloadthis
                  rempsyc car forcats RRPP caper geiger phangorn lmtest 
-                 MuMIn phytools conflicted tibble irr nlme ggdist")
+                 MuMIn phytools conflicted tibble irr nlme ggdist rworkflows")
 
 import_packages <- 
   function(x)
@@ -2220,6 +2227,49 @@ bzEe <- shimada |>
   theme(plot.title = element_text(face = "bold"),
         axis.text = element_text(face = "bold"),
         axis.title = element_text(face = "bold"))
+```
+
+## Ecology classification
+
+```{r}
+library(randomForest)
+
+macro_ecology <- 
+  lamniformes_data |> 
+  mutate(ecology = case_when(species == "Cetorhinus maximus" ~ "Microphagous", T ~ "Macrophagous")) |> 
+  mutate(ecology = as.factor(ecology)) |> 
+  mutate(lamellae_type = case_when(species == "Cetorhinus maximus" ~ "Thick concentric lamellae", T ~ "Thin concentric lamellae")) |> 
+  mutate(lamellae_type = as.factor(lamellae_type)) |> 
+  select(log_cd,log_tl,ecology,lamellae_type)
+
+# Predict (use Lamnidae Tl estimates)
+fossil_dataset <- data.frame(log_tl = log10(IS.IIII$fit), log_cd = aptian_shark$log_cd,lamellae_type = "Thin concentric lamellae")
+fossil_dataset$lamellae_type <- factor(fossil_dataset$lamellae_type, levels = levels(macro_ecology$lamellae_type))
+
+rf_model <- randomForest(
+  ecology ~ log_cd + log_tl + lamellae_type,
+  data = macro_ecology,
+  ntree = 1000,
+  mtry = 2,
+  importance = TRUE
+)
+
+predict(rf_model, newdata = fossil_dataset,type = "prob") |> 
+  as.data.frame() |> 
+  mutate(specimen = c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29")) |> 
+  tidyr::pivot_longer(cols = c("Macrophagous","Microphagous"),names_to = "Ecology",values_to = "Predictions") |> 
+  ggplot(mapping = aes(x = "", y = Predictions, fill = Ecology)) +
+  geom_bar(stat = "identity",position = "fill") +
+  labs(x = "%", y = NULL) +
+  scale_fill_manual(values = c("#2D716F","#2E2D29")) +
+  geom_text(aes(label = paste0(round(Predictions*100), "%")),
+            position = position_stack(vjust = 0.5), size = 3,color = "white") +
+  facet_wrap(~ specimen, ncol = 5)+
+  theme_void() +
+  theme(strip.text = element_text(size = 8),
+        plot.title = element_text(face = "bold"),
+        aspect.ratio = 2,
+        legend.position = "bottom")
 ```
 
 ## Download data
