@@ -43,11 +43,10 @@ editor_options:
   chunk_output_type: console
 ---
 
-## Workflow
+## Docker Workflow and Github Action
 
 ```{r}
-# Workflow file
-path <- rworkflows::use_workflow()
+
 ```
 
 ## Libraries
