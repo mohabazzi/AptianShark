@@ -2189,7 +2189,8 @@ meg_fit2 <-
         aspect.ratio = 1)
 
 # Predictions (using interspecific model)
-10^predict(object = interSM4,newdata = data.frame(log_cd = cooper_megladon$log_cd),interval = "prediction") |> 
+meg_fit3 <-
+  10^predict(object = interSM4,newdata = data.frame(log_cd = cooper_megladon$log_cd),interval = "prediction") |> 
   as.data.frame() |> 
   ggplot(aes(x = 1:141,y = fit)) +
   geom_errorbar(aes(ymin = lwr, ymax = upr), color = "#08306b") +
