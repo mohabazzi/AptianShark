@@ -11,7 +11,9 @@ datasets presented in **Early evolutionary onset of large-body sizes in lamnifor
 
 by Mohamad Bazzi, Mikael Siversson, Sabine Wintner, Michael Newbrey, Jonathan L. Payne, Nicolás E. Campione, Aubrey J. Roberts, Stephen Hall, Tatianna Blake, and Benjamin P. Kear
 
-Code written and maintained by Mohamad Bazzi Contact:
+Code written and maintained by Mohamad Bazzi 
+<br/>
+Contact:
 <bazzi@stanford.edu> and <mohammmed_bazzi@hotmail.com>
 
 ## Access .Rdata
@@ -28,4 +30,4 @@ pb_download(file = "default.RData",dest = tempdir(),repo = "mohabazzi/AptianShar
 load(file = file.path(tempdir(),"default.RData"))
 ```
 
-[r](/data) contains all data file analysed in this study.
+[data](/data) contains all data file analysed in this study.
