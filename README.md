@@ -6,16 +6,13 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-This GitHub repository contains the code used in analysis of all
-datasets used in **Continuity of large-body size in the evolution of
-lamniform sharks**
+This GitHub repository contains the code used to analyse all
+datasets presented in **Early evolutionary onset of large-body sizes in lamniform sharks**
 
-by Mohamad Bazzi, Mikael Siversson, Sabine Wintner, Michael Newbrey,
-Aubrey J. Roberts, Stephen Hall, Nicolás E. Campione, Tatianna Blake,
-Jonathan L. Payne and Benjamin P. Kear
+by Mohamad Bazzi, Mikael Siversson, Sabine Wintner, Michael Newbrey, Jonathan L. Payne, Nicolás E. Campione, Aubrey J. Roberts, Stephen Hall, Tatianna Blake, and Benjamin P. Kear
 
 Code written and maintained by Mohamad Bazzi Contact:
-<bazzi@stanford.edu>
+<bazzi@stanford.edu> and <mohammmed_bazzi@hotmail.com>
 
 ## Access .Rdata
 
