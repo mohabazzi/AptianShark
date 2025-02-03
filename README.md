@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. -->
 
-# Continuity of large-body size in the evolution of lamniform sharks
+# Early evolutionary onset of large-body sizes in lamniform sharks
 
 <!-- badges: start -->
 <!-- badges: end -->

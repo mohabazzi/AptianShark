@@ -1,5 +1,5 @@
 ---
-title: "Continuity of large-body size in the evolution of lamniform sharks"
+title: "Early evolutionary onset of large-body sizes in lamniform sharks"
 title-block-banner: "#2E2D29"
 title-block-banner-color: "#FFFFFF"
 subtitle: "Supplementary Data:"
@@ -45,18 +45,14 @@ editor_options:
 
 ## Docker Workflow and Github Action
 
-```{r message=FALSE}
-
-```
-
 ## Libraries
 
 ```{r message=FALSE,results='hide',warning=FALSE}
 R.packages <- c("ozmaps ggpubr ggspatial dplyr openxlsx ggplot2 tidyr
                  purrr readxl kableExtra knitr gtsummary gt MASS broom 
-                 smatr MASSTIMATE ggpmisc ggrepel smatr performance downloadthis
+                 smatr MASSTIMATE ggpmisc ggrepel smatr performance flextable
                  rempsyc car forcats RRPP caper geiger phangorn lmtest randomForest
-                 MuMIn phytools conflicted tibble irr nlme ggdist dockerfiler")
+                 MuMIn phytools conflicted tibble irr nlme ggdist")
 
 import_packages <- 
   function(x)
@@ -1194,9 +1190,10 @@ dist_species <-
 #### Heterogeneous slopes test 
 
 ```{r}
-# Fit models.
-common_slope <- lm.rrpp(log_tl ~ log_cd + species, data = lamniformes_data) # homogeneity of slopes test (additive model)
-unqiue_slope <- lm.rrpp(log_tl ~ log_cd * species, data = lamniformes_data) # heterogeneity of slopes test (iteraction model)
+# Homogeneity of slopes test (additive model)
+common_slope <- lm.rrpp(log_tl ~ log_cd + species, SS.type = "III",RRPP = T,iter = 999,data = lamniformes_data)
+# Heterogeneity of slopes test (iteraction model)
+unqiue_slope <- lm.rrpp(log_tl ~ log_cd * species, SS.type = "III",RRPP = T,iter = 999,data = lamniformes_data)
 
 # summary(common_slope)$table # null
 # summary(unqiue_slope)$table # alternative
@@ -1250,11 +1247,19 @@ PW <- pairwise(unqiue_slope, groups = lamniformes_data$species, covariate = NULL
 # Select the ones that are significant.
 summary(PW, test.type = "dist", confidence = 0.95, stat.table = TRUE)$summary.table  |> 
   as.data.frame() |> 
-  filter(`Pr > d` <= 0.05) |> 
-  mutate(across(1:4, ~ round(.x, digits = 3))) |> 
-  knitr::kable(caption = "Pairwise statistics from an analysis of covariance. The dist-test compares LS means 
-                         (estimated response at mean log-CD) among species.") |> 
-  kable_styling()
+  # mutate("`Pr > d`" = p.adjust(p = `Pr > d`,method = "fdr"))
+  # filter(`Pr > d` <= 0.05) |> 
+  mutate(across(1:4, ~ round(.x, digits = 3))) |>
+  # filter(Z >= 0)
+  # Look at the distribution of effect sizes.
+  ggplot(aes(x = Z)) +
+  geom_histogram(col = "#25282AFF", fill = "white") +
+  geom_vline(xintercept = 0, linetype = 2, col = "#E16A86") +
+  labs(x = "Effect size (Z)", y = "Count") +
+  theme_bw()
+  # knitr::kable(caption = "Pairwise statistics from an analysis of covariance. The dist-test compares LS means 
+  #                       (estimated response at mean log-CD) among species.") |> 
+  #kable_styling()
 ```
 
 <br/>
@@ -1283,14 +1288,14 @@ interSM4 <- lm(log_tl ~ log_cd, data = lamniformes_data[lamniformes_data$family 
 # tidy(interSM4,conf.int = T)
 
 # PPE.
-c(ppe(true = 10^lamniformes_data$log_tl,pred = 10^fitted(interSM1))$mean,
-  ppe(true = 10^lamniformes_data[!lamniformes_data$genus == "Alopias",]$log_tl,
-    pred = 10^fitted(interSM2))$mean,
-  ppe(true = 10^lamniformes_data[!lamniformes_data$genus %in% c("Alopias","Cetorhinus"),]$log_tl,
-    pred = 10^fitted(interSM3))$mean,
-  ppe(true = 10^lamniformes_data[lamniformes_data$family == "Lamnidae",]$log_tl,
-    pred = 10^fitted(interSM4))$mean
-)
+# c(ppe(true = 10^lamniformes_data$log_tl,pred = 10^fitted(interSM1))$mean,
+#   ppe(true = 10^lamniformes_data[!lamniformes_data$genus == "Alopias",]$log_tl,
+#     pred = 10^fitted(interSM2))$mean,
+#   ppe(true = 10^lamniformes_data[!lamniformes_data$genus %in% c("Alopias","Cetorhinus"),]$log_tl,
+#     pred = 10^fitted(interSM3))$mean,
+#   ppe(true = 10^lamniformes_data[lamniformes_data$family == "Lamnidae",]$log_tl,
+#     pred = 10^fitted(interSM4))$mean
+# )
 ```
 
 ```{r fig.cap= "Log-space of lamniform centrum size vs the fossil specimens. This includes all 10 species for which data was available."}
@@ -1411,7 +1416,7 @@ species_prediction <- purrr::map(species_prediction, ~mutate(.x, specimens = c("
 
 #### Model performance and auxiliary results
 
-The performance of each species-level model is evaluated using the **Mean Absolute Error (MAE)**. This MAE is a measure of **goodness-of-fit** and represents the average absolute difference between the predicted (fitted) values and the actual target values (in this context TL).
+The performance of each species-level model is evaluated using the **Mean Absolute Error (MAE)** and **Percent Prediction Error (PPE)**. This MAE is a measure of **goodness-of-fit** and represents the average absolute difference between the predicted (fitted) values and the actual target values (in this context TL). PPE is
 
 **MAE** is given by:
 
