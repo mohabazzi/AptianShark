@@ -43,8 +43,6 @@ editor_options:
   chunk_output_type: console
 ---
 
-## Docker Workflow and Github Action
-
 ## Libraries
 
 ```{r message=FALSE,results='hide',warning=FALSE}
@@ -1189,7 +1187,7 @@ dist_species <-
 
 #### Heterogeneous slopes test 
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 # Homogeneity of slopes test (additive model).
 common_slope <- lm.rrpp(log_tl ~ log_cd + species, SS.type = "III",RRPP = T,iter = 999,data = lamniformes_data)
 # Heterogeneity of slopes test (iteraction model)
@@ -1515,6 +1513,8 @@ lapply(maeR, function(x) { MASSTIMATE::ppe(10^x$log_tl, 10^x$fit)$mean }) |>
   kable_styling()
 ```
 
+<br/>
+
 #### Full GWS {#sec-gws}
 
 <!-- Analysis using all GWS records -->
@@ -1640,9 +1640,10 @@ bind_rows(lamnidae_data |>
        x = "Centrum diameter (log10 cm)", y = "Count", fill = "")
 
 # Check for negative values.
-lamnidae_data |> 
-  select(species,contains("log_")) |>
-  filter(log_cd < 0.0)
+
+# lamnidae_data |> 
+#   select(species,contains("log_")) |>
+#   filter(log_cd < 0.0)
 
 # Lamnidae species CD-TL relationship.
 lamnidae_data |> 
@@ -1954,10 +1955,9 @@ grp_pgls <- rrpp.data.frame(CD = setNames(grp_average_clean$CD,gsub(" ", "_", gr
 grp_pgls$Cov <- vcv.phylo(lamn_tree)
 
 pgls_shark <- lm.rrpp(f1 = TL ~ CD,data = grp_pgls, Cov = grp_pgls$Cov,  print.progress = FALSE)
-# pgls_shark |> anova()
 nonPhylo_shark <- lm.rrpp(f1 = TL ~ CD,data = grp_pgls,  print.progress = FALSE)
 
-model.comparison(pgls_shark,nonPhylo_shark,type = "logLik")
+# model.comparison(pgls_shark,nonPhylo_shark,type = "logLik")
 
 # Generalized Least-Squares (via OLS projection)
 # tree_ggplot <- 
@@ -2035,15 +2035,15 @@ zTL_alopias <- geomorph::physignal.z(A = setNames(exclude_alopias_d[,"TL"],gsub(
 
 set.seed(2)
 
-cbind(
-  # Blomberg K.
-  phytools::phylosig(tree = exclude_alopias_t,
-                     x = setNames(exclude_alopias_d[,"CD"],gsub(" ","_",exclude_alopias_d$species)),
-                     test = T)[1:2] |> unlist(),
-  phytools::phylosig(tree = exclude_alopias_t,
-                     x = setNames(exclude_alopias_d[,"TL"],gsub(" ","_",exclude_alopias_d$species)),
-                     test = T)[1:2] |> unlist()
-)
+# Blomberg K.
+# cbind(
+#   phytools::phylosig(tree = exclude_alopias_t,
+#                      x = setNames(exclude_alopias_d[,"CD"],gsub(" ","_",exclude_alopias_d$species)),
+#                      test = T)[1:2] |> unlist(),
+#   phytools::phylosig(tree = exclude_alopias_t,
+#                      x = setNames(exclude_alopias_d[,"TL"],gsub(" ","_",exclude_alopias_d$species)),
+#                      test = T)[1:2] |> unlist()
+# )
 ```
 
 ## Modern body-size ranges
@@ -2145,10 +2145,11 @@ tidy(pos_model,conf.int = TRUE) |>
   kable_styling(bootstrap_options = "striped",full_width = F)
 
 # Correlation test.
-cor(gws_natanson$n_ver,gws_natanson$max_d,method = "spearman")
-cor(gws_natanson$n_ver,gws_natanson$fl_cm,method = "spearman")
-cor(gws_natanson$max_d,gws_natanson$fl_cm,method = "spearman")
-cor(gws_natanson$max_t,gws_natanson$fl_cm,method = "spearman")
+
+# cor(gws_natanson$n_ver,gws_natanson$max_d,method = "spearman")
+# cor(gws_natanson$n_ver,gws_natanson$fl_cm,method = "spearman")
+# cor(gws_natanson$max_d,gws_natanson$fl_cm,method = "spearman")
+# cor(gws_natanson$max_t,gws_natanson$fl_cm,method = "spearman")
 ```
 
 ## Re-estimating extinct species
@@ -2160,11 +2161,13 @@ cor(gws_natanson$max_t,gws_natanson$fl_cm,method = "spearman")
 ```{r warning=FALSE, message=FALSE}
 # First use the regression equation by Gottfried et al. (1996) to confirm the result in Frederickson et al. 2015.
 # The CD here is in mm units and result in m.
-0.22 + 0.058 * 110
+
+# 0.22 + 0.058 * 110
 
 # Use Lamnidae interspecific model to re-estimate the TL.
-10^predict(object = interSM4,newdata = data.frame(log_cd = log10(11.0)),interval = "prediction")
-10^predict(object = interSM4,newdata = data.frame(log_cd = log10(8.7)), interval = "prediction")
+
+# 10^predict(object = interSM4,newdata = data.frame(log_cd = log10(11.0)),interval = "prediction")
+# 10^predict(object = interSM4,newdata = data.frame(log_cd = log10(8.7)), interval = "prediction")
 
 # Cretaceous lamniform species.
 stem_species <- 
