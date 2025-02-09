@@ -590,11 +590,12 @@ performance::check_model(x = length_linear_fit_ols,
 
 ```{r}
 # Assumptions checks.
-kable(nice_assumptions(model = length_linear_fit_ols), col.format.p = 2:4,
-      caption = "Diagnostics for the linear model (CD-TL) applied to C. carcharias.
-                 Diagnostic is how many assumptions (i.e. normality of residuals, homoscedasticity, and independence) are not respected by the model fit.
-                 P-values < .05 imply assumptions are not respected.") |>
-  kable_styling(bootstrap_options = "striped",full_width = T)
+
+# kable(nice_assumptions(model = length_linear_fit_ols), col.format.p = 2:4,
+#       caption = "Diagnostics for the linear model (CD-TL) applied to C. carcharias.
+#                  Diagnostic is how many assumptions (i.e. normality of residuals, homoscedasticity, and independence) are not respected by the model fit.
+#                  P-values < .05 imply assumptions are not respected.") |>
+#   kable_styling(bootstrap_options = "striped",full_width = T)
 ```
 
 <br/>
@@ -710,9 +711,10 @@ performance::check_model(x = mass_linear_fit_ols,
 
 ```{r}
 # One assumption (i.e. normality) is not respected.
-kable(nice_assumptions(model = mass_linear_fit_ols), stars = T, col.format.p = 2:4) |>
-  kable_styling(bootstrap_options = "striped",
-                full_width = T)
+
+# kable(nice_assumptions(model = mass_linear_fit_ols), stars = T, col.format.p = 2:4) |>
+#   kable_styling(bootstrap_options = "striped",
+#                 full_width = T)
 ```
 
 <!--Leverage analysis-->
@@ -755,7 +757,7 @@ c(summary(mass_linear_fit_ols)$r.squared,summary(mass_linear_fit_ols_2)$r.square
 ) |> setNames(nm = c("Model I","Model II"))
 
 # Check diagnostics.
-nice_table(nice_assumptions(model = mass_linear_fit_ols_2),stars = T, col.format.p = 2:4)
+# nice_table(nice_assumptions(model = mass_linear_fit_ols_2),stars = T, col.format.p = 2:4)
 
 # Quadratic model (or second-degree polynomial).
 mass_quad_fit_ols <- lm(log_netmass~log_cd+I(log_cd^2),data = carcharodon_carcharias_wintner,subset = cook.D < 4 / length(cook.D))
