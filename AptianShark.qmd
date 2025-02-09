@@ -1190,7 +1190,7 @@ dist_species <-
 #### Heterogeneous slopes test 
 
 ```{r}
-# Homogeneity of slopes test (additive model)
+# Homogeneity of slopes test (additive model).
 common_slope <- lm.rrpp(log_tl ~ log_cd + species, SS.type = "III",RRPP = T,iter = 999,data = lamniformes_data)
 # Heterogeneity of slopes test (iteraction model)
 unqiue_slope <- lm.rrpp(log_tl ~ log_cd * species, SS.type = "III",RRPP = T,iter = 999,data = lamniformes_data)
@@ -1272,30 +1272,43 @@ summary(PW, test.type = "dist", confidence = 0.95, stat.table = TRUE)$summary.ta
 `ML4` -- Interspecific model with **Lamnidae** species.
 
 ```{r}
-# Lamniformes (all species).
-interSM1 <- lm(log_tl ~ log_cd, data = lamniformes_data)
-# Lamniformes (excluding Alopidae)
-interSM2 <- lm(log_tl ~ log_cd, data = lamniformes_data[!lamniformes_data$genus == "Alopias",])
-# Lamniformes (excluding Alopidae and Cetorhinidae)
-interSM3 <- lm(log_tl ~ log_cd, data = lamniformes_data[!lamniformes_data$genus %in% c("Alopias","Cetorhinus"),])
-# Lamniformes (excluding all but Lamnidae)
-interSM4 <- lm(log_tl ~ log_cd, data = lamniformes_data[lamniformes_data$family == "Lamnidae",])
+# Compute trait averages per species.
+grp_average <- 
+  lamniformes_data |>
+  group_by(species) |>
+  summarise(log_tl = mean(log_tl),log_cd = mean(log_cd)) |> 
+  as.data.frame()
 
-# Compare LM2 versus LM4. How does TL change for one unit increase in CD?
+grp_max <- 
+  lamniformes_data |>
+  group_by(species) |>
+  summarise(log_tl = max(log_tl),log_cd = max(log_cd)) |> 
+  as.data.frame()
+
+rownames(grp_average) <- grp_average$species
+
+# Lamniformes (all species).
+interSM1 <- lm(log_tl ~ log_cd, data = grp_average)
+# Lamniformes (excluding Alopidae)
+interSM2 <- lm(log_tl ~ log_cd, data = grp_average[c(4:10),])
+# Lamniformes (excluding Alopidae and Cetorhinidae)
+interSM3 <- lm(log_tl ~ log_cd, data = grp_average[c(4:5,7:10),])
+# Lamniformes (excluding all but Lamnidae)
+interSM4 <- lm(log_tl ~ log_cd, data = grp_average[c(5,7:9),])
+
+# Compare models.
+
+# ppe(true = 10^grp_average$log_tl,pred = 10^fitted(interSM1))$mean
+# ppe(true = 10^grp_average[c(4:10),]$log_tl,pred = 10^fitted(interSM2))$mean
+# ppe(true = 10^grp_average[c(4:5,7:10),]$log_tl,pred = 10^fitted(interSM3))$mean
+# ppe(true = 10^grp_average[c(5,7:9),]$log_tl,pred = 10^fitted(interSM4))$mean
+
+# How does TL change for one unit increase in CD?
+
 # tidy(interSM1,conf.int = T)
 # tidy(interSM2,conf.int = T)
 # tidy(interSM3,conf.int = T)
 # tidy(interSM4,conf.int = T)
-
-# PPE.
-# c(ppe(true = 10^lamniformes_data$log_tl,pred = 10^fitted(interSM1))$mean,
-#   ppe(true = 10^lamniformes_data[!lamniformes_data$genus == "Alopias",]$log_tl,
-#     pred = 10^fitted(interSM2))$mean,
-#   ppe(true = 10^lamniformes_data[!lamniformes_data$genus %in% c("Alopias","Cetorhinus"),]$log_tl,
-#     pred = 10^fitted(interSM3))$mean,
-#   ppe(true = 10^lamniformes_data[lamniformes_data$family == "Lamnidae",]$log_tl,
-#     pred = 10^fitted(interSM4))$mean
-# )
 ```
 
 ```{r fig.cap= "Log-space of lamniform centrum size vs the fossil specimens. This includes all 10 species for which data was available."}
@@ -1346,7 +1359,8 @@ bind_rows(
         plot.title = element_text(face = "bold",size = 12),
         plot.subtitle = element_text(size = 10),
         aspect.ratio = 1)
-  
+
+# Version 1
 lamniformes_data |> 
   mutate(class = case_when(genus == "Alopias" ~ "Alopias",T ~ ""),
          class = case_when(genus != "Alopias" ~ "Non-Alopias", T ~ genus)) |> 
@@ -1371,6 +1385,35 @@ lamniformes_data |>
         plot.title = element_text(face = "bold",size = 12),
         plot.subtitle = element_text(size = 10),
         aspect.ratio = 1)
+
+# Version 2.
+
+# data.frame(cd = grp_average_clean$CD,
+#            tl = grp_average_clean$TL,
+#            labels = grp_average_clean$species) |> 
+#   ggplot(aes(x = cd,y = tl)) +
+#   geom_point(fill = "black",size = 2, shape = 21) +
+#   geom_text_repel(aes(label = labels),
+#                   size = 4,
+#                   box.padding = unit(0.35, "lines"),
+#                   point.padding = unit(0.3, "lines")) +
+#   labs(y = "Average total length (log10 cm)",
+#        x = "Average centrum diameter (log10 cm)") +
+#   annotation_logticks() +
+#   geom_abline(intercept = coef(interSM1)[1], slope = coef(interSM1)[2], color = "#3B7C70FF") +
+#   geom_abline(intercept = coef(interSM2)[1], slope = coef(interSM2)[2], color = "#D01556FF") +
+#   geom_abline(intercept = coef(interSM3)[1], slope = coef(interSM3)[2], color = "#CE9642FF") +
+#   geom_abline(intercept = coef(interSM4)[1], slope = coef(interSM4)[2], color = "#25282AFF") +
+#   theme_bw() +
+#   theme(axis.title = element_text(face = "bold",size = 10),
+#         axis.text = element_text(size = 8),
+#         axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+#         legend.position = "none",
+#         legend.title = element_text(face = "bold"),
+#         legend.text = element_text(face = "italic"),
+#         plot.title = element_text(face = "bold",size = 12),
+#         plot.subtitle = element_text(size = 10),
+#         aspect.ratio = 1)
 ```
 
 ### Fossil Predictions (II)
@@ -1494,7 +1537,7 @@ p2 <-
   ggpmisc::stat_poly_eq(use_label(c("eq", "adj.R2", "f", "p", "n")),
                         size = 4.0,label.x = "left",label.y = "top",
                         color = "black") +
-  scale_fill_manual(values = c("#E16A86","#08306b")) +
+  scale_fill_manual(values =  c("#E16A86","#08306b")) +
   scale_color_manual(values = c("#E16A86","#08306b")) +
   # Prediction intervals.
   geom_line(aes(y = gws_pi[,"lwr"]), col = "black", linetype = "dashed") +
@@ -1516,7 +1559,8 @@ p3 <- p2 +
                 aes(x = aptian_shark$log_cd,y = log10(fit), ymin = log10(lwr),ymax = log10(upr))
                 ,color = "black")
 
-p3
+print(p3)
+
 # PPE.
 complete_gws_ppe <-
   ppe(true = 10^carcharodon_carcharias_complete$log_tl,
@@ -1678,6 +1722,8 @@ bind_rows(alopiidae_data |> mutate(status = "Extant"),
 alopiidae_data |> 
   ggplot(aes(x = log_cd, y = log_tl)) +
   geom_point(aes(color = species), fill = "white",size = 2, shape = 21) +
+  # Averages.
+  geom_point(data = grp_average[c(1:3),], aes(x = log_cd, y = log_tl, colour = species), shape = 19,size = 4,show.legend = F) +
   annotation_logticks() +
   geom_smooth(aes(colour = species),method = "lm",show.legend = F,se = F) +
   scale_color_manual(values = c("#264653", "#2A9D8F", "#E9C46A")) +
@@ -1780,6 +1826,11 @@ bind_rows(IS.I,IS.II,IS.III,IS.IIII) |>
         strip.text = element_text(face = "bold"),
         aspect.ratio = 1.8)
 
+# PPE.
+
+# intervals(xvar = IS.I$fit)[c(1,7:8)]
+# intervals(xvar = IS.II$fit)[c(1,7:8)]
+# intervals(xvar = IS.III$fit)[c(1,7:8)]
 # intervals(xvar = IS.IIII$fit)[c(1,7:8)]
 ```
 
@@ -1885,23 +1936,8 @@ sgtree <- phytools::readNexus(file = "phylogeny/500treePLtrees.nex")
 # MCC Tree.
 mcc_sgTree <- phangorn::maxCladeCred(x = sgtree,rooted = T)
 
-# Compute trait averages per species.
-grp_average <- 
-  lamniformes_data |>
-  group_by(species) |>
-  summarise(ave_tl = mean(log_tl),ave_cd = mean(log_cd)) |> 
-  as.data.frame()
-
-grp_max <- 
-  lamniformes_data |>
-  group_by(species) |>
-  summarise(ave_tl = max(log_tl),ave_cd = max(log_cd)) |> 
-  as.data.frame()
-
-rownames(grp_average) <- grp_average$species
-
-grp_average_clean <- data.frame(CD = setNames(grp_average$ave_cd,gsub(" ", "_", grp_average$species)),
-                                TL = setNames(grp_average$ave_tl,gsub(" ", "_", grp_average$species)),
+grp_average_clean <- data.frame(CD = setNames(grp_average$log_cd,gsub(" ", "_", grp_average$species)),
+                                TL = setNames(grp_average$log_tl,gsub(" ", "_", grp_average$species)),
                                 species = gsub(" ", "_", grp_average$species))
 
 # Drop tips.
@@ -1955,7 +1991,11 @@ pgls_plot <-
         plot.title = element_text(face = "bold",size = 12),
         plot.subtitle = element_text(size = 10),
         aspect.ratio = 1)
+```
 
+### Phylogenetic signal
+
+```{r}
 # Signal including Blombergs K and Effect Size.
 zCD <- geomorph::physignal.z(A = setNames(grp_average_clean[,"CD"],gsub(" ","_",grp_average_clean$species)),
                              phy = lamn_tree,lambda = "front", iter=999)[1]
@@ -1979,8 +2019,31 @@ cbind(
   add_row(CD = unlist(unname(zCD)), TL = unlist(unname(zTL))) |> 
   t() |> 
   magrittr::set_colnames(c("K", "P","Z")) |> 
-  knitr::kable(caption = "Table X. Phylogenetic signal in CD and TL") |>
+  knitr::kable(caption = "Phylogenetic signal in CD and TL") |>
   kableExtra::kable_styling()
+
+# Sensitivity test (exclude Alopias species)
+exclude_alopias_d <- grp_average_clean[c(4:10),]
+exclude_alopias_t <- treedata(phy = mcc_sgTree,data = exclude_alopias_d, warnings = FALSE)$phy
+
+# Effect size.
+zCD_alopias <- geomorph::physignal.z(A = setNames(exclude_alopias_d[,"CD"],gsub(" ","_",exclude_alopias_d$species)),
+                             phy = exclude_alopias_t,lambda = "front", iter=999)[1]
+
+zTL_alopias <- geomorph::physignal.z(A = setNames(exclude_alopias_d[,"TL"],gsub(" ","_",exclude_alopias_d$species)),
+                             phy = exclude_alopias_t,lambda = "front", iter=999)[1]
+
+set.seed(2)
+
+cbind(
+  # Blomberg K.
+  phytools::phylosig(tree = exclude_alopias_t,
+                     x = setNames(exclude_alopias_d[,"CD"],gsub(" ","_",exclude_alopias_d$species)),
+                     test = T)[1:2] |> unlist(),
+  phytools::phylosig(tree = exclude_alopias_t,
+                     x = setNames(exclude_alopias_d[,"TL"],gsub(" ","_",exclude_alopias_d$species)),
+                     test = T)[1:2] |> unlist()
+)
 ```
 
 ## Modern body-size ranges
@@ -2107,11 +2170,11 @@ cor(gws_natanson$max_t,gws_natanson$fl_cm,method = "spearman")
 stem_species <- 
   data.frame(log_cd = log10(mesozoic_data$centrum_diameter/10))
 
-10^predict(object = interSM4,newdata = stem_species,interval = "prediction") |> 
+10^predict(object = interSM3,newdata = stem_species,interval = "prediction") |> 
   data.frame() |> 
   add_column("specimen" = mesozoic_data$label) |> 
   mutate(CD= mesozoic_data$centrum_diameter/10) |> 
-  add_row(fit = 718.7564, lwr = 608.9134, upr = 848.4143,specimen = "NTM P 922-32", CD = 12.6) |> 
+  add_row(fit = 592.5426, lwr = 493.8996, upr = 710.8868,specimen = "NTM P 922-32", CD = 12.6) |> 
   # Order by age
   mutate(specimen = factor(specimen, levels = c("NTM P 922-32","OMNH 68860","KUVP 16343","WAM 96.4.45.108",
                                                 "IGVR 91032","MPPSA-IGVR 36371","FHSM VP-2187","MSNPV 20407–20417",
@@ -2125,7 +2188,7 @@ stem_species <-
   geom_point(data = mesozoic_data,aes(x = label, y = total_length/10), size = 3, shape = 19, colour = "#B83A4B") +
   # CD label.
   #geom_text(aes(x = specimen, y = fit + 200, label = paste0("CD=",as.character(CD),"cm")),size = 6, col = "black") +
-  geom_rect(xmin = 0.7, xmax = 1.3, ymin = 600, ymax = 870,lty = 2,alpha = 0, color = "black") +
+  geom_rect(xmin = 0.7, xmax = 1.3, ymin = 450, ymax = 750,lty = 2,alpha = 0, color = "black") +
   # ‘small,’ 1‒200 cm; ‘medium,’ 201‒400 cm; ‘large,’ 401‒600 cm; and ‘gigantic,’ >600 cm). 
   geom_hline(yintercept = c(201,400,600), lty = c(2,2,1), col = "#08306b") +
   theme_bw() +
@@ -2195,7 +2258,7 @@ meg_fit2 <-
 
 # Predictions (using interspecific model)
 meg_fit3 <-
-  10^predict(object = interSM4,newdata = data.frame(log_cd = cooper_megladon$log_cd),interval = "prediction") |> 
+  10^predict(object = interSM3,newdata = data.frame(log_cd = cooper_megladon$log_cd),interval = "prediction") |> 
   as.data.frame() |> 
   ggplot(aes(x = 1:141,y = fit)) +
   geom_errorbar(aes(ymin = lwr, ymax = upr), color = "#08306b") +
