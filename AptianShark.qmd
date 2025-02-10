@@ -46,9 +46,9 @@ editor_options:
 ## Libraries
 
 ```{r message=FALSE,results='hide',warning=FALSE}
-R.packages <- c("ozmaps ggpubr ggspatial dplyr openxlsx ggplot2 tidyr
-                 purrr readxl kableExtra knitr gtsummary gt MASS broom 
-                 smatr MASSTIMATE ggpmisc ggrepel smatr performance flextable
+R.packages <- c("ozmaps ggpubr ggspatial dplyr openxlsx ggplot2 tidyr reshape janitor downlit
+                 purrr readxl kableExtra knitr gtsummary gt MASS broom emmeans geomorph xml2
+                 smatr MASSTIMATE ggpmisc ggrepel smatr performance flextable Metrics
                  rempsyc car forcats RRPP caper geiger phangorn lmtest randomForest
                  MuMIn phytools conflicted tibble irr nlme ggdist")
 
@@ -65,6 +65,7 @@ R.packages |> import_packages()
 conflicted::conflict_prefer("map", "purrr")
 conflicted::conflict_prefer("filter", "dplyr")
 conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("rename","dplyr")
 conflicted::conflict_prefer("summarize", "dplyr")
 conflicted::conflict_prefer("annotate", "ggplot2")
 conflicted::conflict_prefer("AICc", "MuMIn")
@@ -1999,43 +2000,44 @@ pgls_plot <-
 
 ```{r}
 # Signal including Blombergs K and Effect Size.
-zCD <- geomorph::physignal.z(A = setNames(grp_average_clean[,"CD"],gsub(" ","_",grp_average_clean$species)),
-                             phy = lamn_tree,lambda = "front", iter=999)[1]
 
-zTL <- geomorph::physignal.z(A = setNames(grp_average_clean[,"TL"],gsub(" ","_",grp_average_clean$species)),
-                             phy = lamn_tree,lambda = "front", iter=999)[1]
+# zCD <- geomorph::physignal.z(A = setNames(grp_average_clean[,"CD"],gsub(" ","_",grp_average_clean$species)),
+#                              phy = lamn_tree,lambda = "front", iter=999)[1]
+# 
+# zTL <- geomorph::physignal.z(A = setNames(grp_average_clean[,"TL"],gsub(" ","_",grp_average_clean$species)),
+#                              phy = lamn_tree,lambda = "front", iter=999)[1]
+# 
+# set.seed(1)
 
-set.seed(1)
-
-cbind(
+# cbind(
   # Blomberg K.
-  phytools::phylosig(tree = lamn_tree,
-                     x = setNames(grp_average_clean[,"CD"],gsub(" ","_",grp_average_clean$species)),
-                     test = T)[1:2] |> unlist(),
-  phytools::phylosig(tree = lamn_tree,
-                     x = setNames(grp_average_clean[,"TL"],gsub(" ","_",grp_average_clean$species)),
-                     test = T)[1:2] |> unlist()
-) |> 
-  magrittr::set_colnames(c("CD", "TL")) |>
-  as.data.frame() |> 
-  add_row(CD = unlist(unname(zCD)), TL = unlist(unname(zTL))) |> 
-  t() |> 
-  magrittr::set_colnames(c("K", "P","Z")) |> 
-  knitr::kable(caption = "Phylogenetic signal in CD and TL") |>
-  kableExtra::kable_styling()
+#   phytools::phylosig(tree = lamn_tree,
+#                      x = setNames(grp_average_clean[,"CD"],gsub(" ","_",grp_average_clean$species)),
+#                      test = T)[1:2] |> unlist(),
+#   phytools::phylosig(tree = lamn_tree,
+#                      x = setNames(grp_average_clean[,"TL"],gsub(" ","_",grp_average_clean$species)),
+#                      test = T)[1:2] |> unlist()
+# ) |> 
+#   magrittr::set_colnames(c("CD", "TL")) |>
+#   as.data.frame() |> 
+#   add_row(CD = unlist(unname(zCD)), TL = unlist(unname(zTL))) |> 
+#   t() |> 
+#   magrittr::set_colnames(c("K", "P","Z")) |> 
+#   knitr::kable(caption = "Phylogenetic signal in CD and TL") |>
+#   kableExtra::kable_styling()
 
 # Sensitivity test (exclude Alopias species)
-exclude_alopias_d <- grp_average_clean[c(4:10),]
-exclude_alopias_t <- treedata(phy = mcc_sgTree,data = exclude_alopias_d, warnings = FALSE)$phy
+# exclude_alopias_d <- grp_average_clean[c(4:10),]
+# exclude_alopias_t <- treedata(phy = mcc_sgTree,data = exclude_alopias_d, warnings = FALSE)$phy
 
 # Effect size.
-zCD_alopias <- geomorph::physignal.z(A = setNames(exclude_alopias_d[,"CD"],gsub(" ","_",exclude_alopias_d$species)),
-                             phy = exclude_alopias_t,lambda = "front", iter=999)[1]
-
-zTL_alopias <- geomorph::physignal.z(A = setNames(exclude_alopias_d[,"TL"],gsub(" ","_",exclude_alopias_d$species)),
-                             phy = exclude_alopias_t,lambda = "front", iter=999)[1]
-
-set.seed(2)
+# zCD_alopias <- geomorph::physignal.z(A = setNames(exclude_alopias_d[,"CD"],gsub(" ","_",exclude_alopias_d$species)),
+#                              phy = exclude_alopias_t,lambda = "front", iter=999)[1]
+# 
+# zTL_alopias <- geomorph::physignal.z(A = setNames(exclude_alopias_d[,"TL"],gsub(" ","_",exclude_alopias_d$species)),
+#                              phy = exclude_alopias_t,lambda = "front", iter=999)[1]
+# 
+# set.seed(2)
 
 # Blomberg K.
 # cbind(
