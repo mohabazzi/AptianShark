@@ -34,6 +34,9 @@ other-links:
   - text: Custom Quarto Template
     icon: file-code
     href: https://github.com/mohabazzi/stanford-quarto
+  - text: Docker image
+    icon: file-code
+    href: https://hub.docker.com/r/mohamadbazzi/aptian-image
 code-links:
   - text: Github Repo
     icon: github
