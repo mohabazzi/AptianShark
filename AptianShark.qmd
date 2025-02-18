@@ -1,5 +1,5 @@
 ---
-title: "Early evolutionary onset of large-body sizes in lamniform sharks"
+title: "Early gigantic lamniform marks onset of mega-body size in modern shark evolution"
 title-block-banner: "#2E2D29"
 title-block-banner-color: "#FFFFFF"
 subtitle: "Supplementary Data:"
