@@ -77,10 +77,10 @@ conflicted::conflict_prefer("AICc", "MuMIn")
 ## Custom functions
 
 ```{r}
-#' @title Averaging digitized measurements 
-#' @description This function returns a dataframe obtained by applying the Reduce function. 
-#' @return a dataframe.
-#' @details remove is given as an argument to filter the replicate column which is numeric and losses meaning after Reduce is applied. 
+#' @title Averaging digitized measurements.
+#' @description This function returns a data frame with average measurements attained using Reduce function.
+#' @return A dataframe.
+#' @details Remove is given as an argument to filter the 'replicate column' which is numeric and losses meaning after Reduce is applied. 
 
 numeric_details <- function(path = NULL, remove = NULL) {
   sheets <- getSheetNames(file = path)
@@ -100,7 +100,7 @@ numeric_details <- function(path = NULL, remove = NULL) {
 other_details <- function(path = NULL) {
   frame <- 
     read.xlsx(xlsxFile = path, sheet = 1) |> 
-    # Bring species and sex. 
+    # Bring back species and sex information. 
     select(where(~ !is.numeric(.)))
     return(frame)
 }
@@ -156,7 +156,7 @@ icc_custom <- function(path = NULL) {
   return(combin_res)
 }
 
-#'@title Confidence & Prediction Intervals
+#'@title Confidence & Prediction Intervals.
 
 intervals <-  function(xvar,alpha=0.975) {
   mean<-mean(xvar)
