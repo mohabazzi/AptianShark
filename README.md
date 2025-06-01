@@ -9,7 +9,7 @@
 This GitHub repository contains the code used to analyse all
 datasets presented in **Early gigantic lamniform marks onset of mega-body size in modern shark evolution**
 
-by Mohamad Bazzi, Mikael Siversson, Sabine Wintner, Michael Newbrey, Jonathan L. Payne, Nicolás E. Campione, Aubrey J. Roberts, Stephen Hall, and Benjamin P. Kear
+by Mohamad Bazzi, Mikael Siversson, Sabine Wintner, Michael Newbrey, Jonathan L. Payne, Nicolás E. Campione, Aubrey J. Roberts, Lisa J. Natanson, Stephen Hall, and Benjamin P. Kear
 
 Code written and maintained by Mohamad Bazzi 
 <br/>

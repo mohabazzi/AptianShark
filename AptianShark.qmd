@@ -53,7 +53,7 @@ R.packages <- c("ozmaps ggpubr ggspatial dplyr openxlsx ggplot2 tidyr reshape ja
                  purrr readxl kableExtra knitr gtsummary gt MASS broom emmeans geomorph xml2
                  smatr MASSTIMATE ggpmisc ggrepel smatr performance flextable Metrics
                  rempsyc car forcats RRPP caper geiger phangorn lmtest randomForest
-                 MuMIn phytools conflicted tibble irr nlme ggdist")
+                 MuMIn phytools conflicted tibble irr nlme ggdist adephylo")
 
 import_packages <- 
   function(x)
@@ -77,12 +77,15 @@ conflicted::conflict_prefer("AICc", "MuMIn")
 ## Custom functions
 
 ```{r}
-#' @title Averaging digitized measurements.
-#' @description This function returns a data frame with average measurements attained using Reduce function.
+#' @title Compute average measurements across multiple dataframes
+#' 
+#' @description #' This function takes a list of data frames and a set of variable names, and returns a single data frame containing the average values of those 
+#' variables across all input data frames.
+#' 
 #' @return A dataframe.
-#' @details Remove is given as an argument to filter the 'replicate column' which is numeric and losses meaning after Reduce is applied. 
+#' @details Remove is given as an argument to filter the 'replicate column' which is numeric and losses meaning after Reduce is applied.
 
-numeric_details <- function(path = NULL, remove = NULL) {
+aggregate_measurements <- function(path = NULL, remove = NULL) { 
   sheets <- getSheetNames(file = path)
   numeric_var <- lapply(sheets, function(x) {
     df <- read.xlsx(xlsxFile = path, sheet = x)
@@ -90,11 +93,11 @@ numeric_details <- function(path = NULL, remove = NULL) {
   }) 
   names(numeric_var) <- sheets
   # Compute the average.
-  numeric_details <- Reduce(f = "+",x = numeric_var)/length(numeric_var)
+  ave_sum <- Reduce(f = "+",x = numeric_var)/length(numeric_var)
   if (!is.null(remove)) {
-    numeric_details <- numeric_details |> select(-all_of(remove))
+    ave_sum <- ave_sum |> select(-all_of(remove))
   }
-  return(numeric_details)
+  return(ave_sum)
 }
 
 other_details <- function(path = NULL) {
@@ -156,7 +159,7 @@ icc_custom <- function(path = NULL) {
   return(combin_res)
 }
 
-#'@title Confidence & Prediction Intervals.
+#'@title Confidence and Prediction Intervals.
 
 intervals <-  function(xvar,alpha=0.975) {
   mean<-mean(xvar)
@@ -175,11 +178,11 @@ intervals <-  function(xvar,alpha=0.975) {
 }
 ```
 
-## Objectives and rationale
+## Aims
 
-Here we adopt an extant-scaling approach using ordinary least square regression modelling based on the total length (TL) and centrum diameter (CD) of modern lamniform species to **1)** explore the performance of centrum diameter as a proxy of body size; and **2)** generate body size predictions (total length and mass) in the hitherto largest described and geologically oldest giant lamniform shark on record.
+Here we adopt an extant-scaling approach using Ordinary Least Squares regression (OLS) modelling based on the total length (TL) and centrum diameter (CD) of modern lamniform species to **1)** explore the performance of centrum diameter as a proxy of body size; and **2)** generate body size predictions (total length and mass) in the hitherto largest described and geologically oldest giant lamniform shark on record.
 
-## Framework & methodology
+## Fossil site
 
 ```{r warning=FALSE,message=FALSE,results='hide',echo=FALSE,fig.show='hide'}
 # Locality map.
@@ -222,24 +225,24 @@ ggarrange(AuMap,
 
 ### Data wrangling and feature engineering
 
-**Extant size data:** **\[1\]** Data on body length and mass, along with measurements of vertebral centra of white sharks (*Carcharodon carcharias*) off the east coast of South Africa [@Winter1999]. **\[2\]** Equivalent measurement data compiled from the literature of Lamnidae and Alopiidae species: *Isurus oxyrinchus*, *Lamna nasus*, and *Alopias pelagicus* [@Natanson2006; @Natanson2002; @Drew2015]. **\[3\]** Complementary data extracted from static images of scatter plots showing the relationship between centrum diameter/radius and body length (fork, precaudal, and total length) of *Pseudocarcharias kamoharai* [@Kindong2020], *Cetorhinus maximus* [@Natanson2008], *Lamna ditropis* [@Goldman2006], *Carcharias taurus* [@Lucifora2003], *A. pelagicus* [@Liu1999], *C. carcharias* [@Cailliet1985], *A. vulpinus* [@Cailliet1983], and *A. superciliosus* [@Liu1998]. **\[4\]** Single specimen measurements of *Odontaspis noronhai* [@Stone2019] and *O. ferox* [@Hansen2013]. **\[5\]** Vertebral centrum measurements, body size, sex, and vertebral count along the spinal column of captured male *C. carcharias* [@Natanson2018].
+**Extant size data:** **\[1\]** Data on body length and mass, along with measurements of vertebral centra of white sharks (*Carcharodon carcharias*) off the east coast of South Africa [@Winter1999]. **\[2\]** Equivalent measurement data compiled from the literature of Lamnidae and Alopiidae species: *Isurus oxyrinchus*, *Lamna nasus*, and *Alopias pelagicus* [@Natanson2006; @Natanson2002; @Drew2015]. **\[3\]** Complementary data extracted from static images of scatter plots showing the relationship between centrum diameter/radius and body length (fork, precaudal, and total length) of *Pseudocarcharias kamoharai* [@Kindong2020], *Cetorhinus maximus* [@Natanson2008], *Lamna ditropis* [@Goldman2006], *Carcharias taurus* [@Lucifora2003], *A. pelagicus* [@Liu1999], *C. carcharias* [@Cailliet1985], *A. vulpinus* [@Cailliet1983], and *A. superciliosus* [@Liu1998]. **\[4\]** Single specimen measurements of *Odontaspis noronhai* [@Stone2019] and *O. ferox* [@Hansen2013]. **\[5\]** Vertebral centrum measurements, body size, sex, and vertebral count along the spinal column of captured *C. carcharias*, *L. nasus*, *I. oxyrinchus*, and *A. vulpinus* [@Natanson2018].
 
 **Fossil size data:** Literature-sourced data on body length and maximum vertebral centra from multiple Cretaceous lamniform species.
 
 **Input data:** Five Aptian-aged cardabiodontid shark vertebral centra of unknown body size.
 
 ```{r}
-# Alopias pelagicus (references: Liu et al. 1999, fig.1 and Drew et al. 2015)
+# Alopias pelagicus (references: Liu et al. 1999, fig.1 and Drew et al. 2015).
 alopias_pelagicus_liu <- 
   cbind(
-    numeric_details(path = "data/Liu et al. 1999.xlsx",remove = "replicate"),
+    aggregate_measurements(path = "data/Liu et al. 1999.xlsx",remove = "replicate"),
     other_details(path = "data/Liu et al. 1999.xlsx")
   ) |>
   relocate("species",.before = 1)
 
 alopias_pelagicus_drew <- 
   cbind(
-    numeric_details(path = "data/Drew et al. 2015.xlsx"),
+    aggregate_measurements(path = "data/Drew et al. 2015.xlsx"),
     other_details(path = "data/Drew et al. 2015.xlsx")
   ) |> 
   relocate(c("order","family","genus","species"),.before = 1)
@@ -256,7 +259,7 @@ alopias_pelagicus_data <-
 # Alopias superciliosus (reference: Liu et al. 1998).
 alopias_superciliosus_data <- 
   cbind(
-  numeric_details(path = "data/Liu et al. 1998.xlsx",remove = "replicate"),
+  aggregate_measurements(path = "data/Liu et al. 1998.xlsx",remove = "replicate"),
   other_details(path = "data/Liu et al. 1998.xlsx")
   ) |> 
   relocate(c("order","family","genus","species"),.before = 1) |> 
@@ -265,7 +268,7 @@ alopias_superciliosus_data <-
 # Alopias vulpinus (reference: Cailliet et al. 1983)
 alopias_vulpinus_data <- 
   cbind(
-    numeric_details(path = "data/Cailliet et al. 1983.xlsx",remove = "replicate"),
+    aggregate_measurements(path = "data/Cailliet et al. 1983.xlsx",remove = "replicate"),
     other_details(path = "data/Cailliet et al. 1983.xlsx")
   ) |> 
   relocate(c("order","family","genus","species"),.before = 1) |> 
@@ -274,16 +277,16 @@ alopias_vulpinus_data <-
 # Carcharias taurus (reference: Lucifora 2003, fig. 6.2)
 carcharias_taurus_data <- 
   cbind(
-    numeric_details(path = "data/Lucifora 2003.xlsx",remove = "replicate"),
+    aggregate_measurements(path = "data/Lucifora 2003.xlsx",remove = "replicate"),
     other_details(path = "data/Lucifora 2003.xlsx")
   ) |> 
   relocate(c("order","family","genus","species"),.before = 1) |> 
   select(!any_of(c("centrum_radius_mm","centrum_diameter_mm","specimen")))
 
-# Carcharodon carcharias (reference: Cailliet et al. 1985, fig. 3, and Wintner and Cliff 1999, fig.)
-carcharodon_carcharias_cailliet <- 
+# Carcharodon carcharias (reference: Cailliet et al. 1985, fig. 3, and Wintner and Cliff 1999, fig. 3)
+carcharodon_carcharias_cailliet <-
   cbind(
-    numeric_details(path = "data/Cailliet et al. 1985.xlsx",remove = "replicate"),
+    aggregate_measurements(path = "data/Cailliet et al. 1985.xlsx",remove = "replicate"),
     other_details(path = "data/Cailliet et al. 1985.xlsx")
   ) |> 
   relocate(c("order","family","genus","species"),.before = 1) |> 
@@ -291,7 +294,7 @@ carcharodon_carcharias_cailliet <-
 
 carcharodon_carcharias_wintner <-
   cbind(
-    numeric_details(path = "data/Wintner & Cliff 1999.xlsx"),
+    aggregate_measurements(path = "data/Wintner & Cliff 1999.xlsx"),
     other_details(path = "data/Wintner & Cliff 1999.xlsx")
   ) |> 
   relocate(c("order","family","genus","species"),.before = 1) |> 
@@ -317,7 +320,7 @@ carcharodon_carcharias_wintner <-
 # Cetorhinus maximus (reference: Natanson et al. 2008, sample size = 21)
 cetorhinus_maximus_data <- 
   cbind(
-    numeric_details(path = "data/Natanson et al. 2008.xlsx",remove = "replicate"),
+    aggregate_measurements(path = "data/Natanson et al. 2008.xlsx",remove = "replicate"),
     other_details(path = "data/Natanson et al. 2008.xlsx")
   ) |> 
   relocate(c("order","family","genus","species"),.before = 1)
@@ -325,7 +328,7 @@ cetorhinus_maximus_data <-
 # Lamna nasus (reference: Natanson et al. 2002, sample size = 575)
 lamna_nasus_data <- 
   cbind(
-    numeric_details(path = "data/Natanson et al. 2002.xlsx"),
+    aggregate_measurements(path = "data/Natanson et al. 2002.xlsx"),
     other_details(path = "data/Natanson et al. 2002.xlsx")
   ) |> 
   relocate(c("order","family","genus","species"),.before = 1) |>
@@ -335,7 +338,7 @@ lamna_nasus_data <-
 # Lamna dipturs (reference: Goldman & Musick 2006, fig.2)
 lamna_dipturs_data <- 
   cbind(
-    numeric_details(path = "data/Goldman & Musick 2006.xlsx",remove = "replicate"),
+    aggregate_measurements(path = "data/Goldman & Musick 2006.xlsx",remove = "replicate"),
     other_details(path = "data/Goldman & Musick 2006.xlsx")
   ) |> 
   relocate(c("order","family","genus","species"),.before = 1) |> 
@@ -344,7 +347,7 @@ lamna_dipturs_data <-
 # Isurus oxyrinchus (reference:Natanson et al. 2006)
 isurus_oxyrinchus_data <- 
   cbind(
-    numeric_details(path = "data/Natanson et al. 2006.xlsx"),
+    aggregate_measurements(path = "data/Natanson et al. 2006.xlsx"),
     other_details(path = "data/Natanson et al. 2006.xlsx")
   ) |> 
   relocate(c("order","family","genus","species"),.before = 1) |>
@@ -354,7 +357,7 @@ isurus_oxyrinchus_data <-
 # Pseudocarcharias kamoharai (reference: Kindong et al. 2020)
 pseudocarcharias_kamoharai_data <- 
   cbind(
-    numeric_details(path = "data/Kindong et al. 2020.xlsx",remove = "replicate"),
+    aggregate_measurements(path = "data/Kindong et al. 2020.xlsx",remove = "replicate"),
     other_details(path = "data/Kindong et al. 2020.xlsx")
   ) |> 
   relocate(c("order","family","genus","species"),.before = 1) |> 
@@ -418,6 +421,9 @@ natanson_data <-
   excel_sheets(path = Natanson) |>
   set_names() |>
   map(read_excel, path = Natanson)
+
+# Complementary data from Natanson et al. 2018 (non-white shark data)
+natanson_supplementary <- read.xlsx(xlsxFile = "data/Natanson et al. 2018_Supplementary.xlsx")
 ```
 
 <!--Summary tables-->
@@ -472,7 +478,7 @@ bind_rows(
 
 ## Linear regression
 
-This section explores the relationship between TL-CD in extant male and female *C. carcharias* using OLS-regression modelling. A factorial anova was also used to test the influence of centrum diameter and sex on total length. Table results show that both 'log_cd' and 'sex' have significant effects on the dependent variable 'log_tl' while their interaction does not play a significant role in *C. carcharias*. These results are consistent with those presented in the original account by [@Winter1999].
+This section explores the relationship between TL-CD in extant male and female *C. carcharias* using OLS-regression modelling. A factorial anova was also used to test the influence of centrum diameter and sex on total length. Table results show that both `log_cd` and `sex` have significant effects on the dependent variable `log_tl` while their interaction does not play a significant role in *C. carcharias*. These results are consistent with those presented in the original account by [@Winter1999].
 
 ::: rmdnote
 $$log10(y) = \log10(\alpha) + log10(\beta) \times log10(x) + \epsilon$$
@@ -513,7 +519,7 @@ length_linear_fit_ols <- lm(log_tl~log_cd, data = carcharodon_carcharias_wintner
 
 # Summary.
 # length_linear_fit_ols |> summary() |> broom::tidy(conf.int = TRUE)
-tbl_regression(length_linear_fit_ols, include = everything(),intercept = TRUE) |> 
+tbl_regression(length_linear_fit_ols, include = everything(),intercept = TRUE) |>
   as_gt() |>  
   tab_header("Linear regression model output (CD ~ TL)") |>
   tab_options(table.align='left')
@@ -782,7 +788,7 @@ ppe_03 <-
 
 #### Total length
 
-In this section, **TL and BM** estimates are based on the white shark data from Wintner & Cliff (1999). Point estimates, 95% prediction and confidence intervals are computed for each specimen. 
+In this section, **TL and BM** estimates are based on the white shark data from [@Winter1999]. Point estimates, 95% prediction and confidence intervals are computed for each specimen. 
 
 Prediction are given by:
 
@@ -837,7 +843,7 @@ tl_graph <-
   # Text
   annotate("text",x = 700, y = 3.8,
            label = "upper~size~limit~of~italic(C.~carcharias)",
-           parse = TRUE,cex = 4,
+           parse = TRUE,size = 1.5,
            col = "#B2182B",fontface = "bold") +
   # Curve.
   annotate(geom = "curve", x = 700, y = 3.9, xend = 645, yend = 3.8,
@@ -894,7 +900,7 @@ mass_graph <-
   # Maximum Great white shark body-weight: <https://www.fisheries.noaa.gov/species/white-shark>
   geom_vline(xintercept = 2041,lwd = 1.5, linetype=1, color = "#B2182B") +
   annotate("text", x = 2350, y = 3.2, label = "upper~size~limit~of~italic(C.~carcharias)",
-           parse = TRUE,col = "#B2182B",size = 3.5) +
+           parse = TRUE,col = "#B2182B",size = 1.5) +
   labs(x = "Body mass (kg)",y = NULL) +
   theme(legend.position = "right",
         title = element_text(face = "bold"),
@@ -1643,7 +1649,8 @@ bind_rows(lamnidae_data |>
         aspect.ratio = 1) +
   labs(title = "Log-10 space",
        subtitle = NULL,
-       x = "Centrum diameter (log10 cm)", y = "Count", fill = "")
+       x = "Centrum diameter (log10 cm)",
+       y = "Count", fill = "")
 
 # Check for negative values.
 
@@ -1696,7 +1703,7 @@ lamnidae_data |>
   # geom_vline(xintercept = c((lamnidae_mean - 2 * lamnidae_sd),(lamnidae_mean + 2 * lamnidae_sd)),colour = "black") +
   labs(title = NULL,subtitle = NULL,
        y = "Count",
-       x = "Predicted total length (log 10)") +
+       x = "Predicted total length (log10)") +
   theme_bw() +
   theme(axis.title = element_text(face = "bold",size = 10),
         axis.text = element_text(size = 8),
@@ -1934,23 +1941,36 @@ ggarrange(meso_01,meso_02,ncol = 2,align = "hv")
 
 <!--Tree from Stein et al. 2018. Downloaded from: https://vertlife.org/sharktree/-->
 
-<!--Using maximum size; weighted approach or within-group fit -->
-
 ```{r}
 # Genetic Data Only Tree.
-sgtree <- phytools::readNexus(file = "phylogeny/500treePLtrees.nex")
-
+shark_tree <- readNexus(file = "phylogeny/500treePLtrees.nex")
 # MCC Tree.
-mcc_sgTree <- phangorn::maxCladeCred(x = sgtree,rooted = T)
+mcc_tree <- maxCladeCred(x = shark_tree,rooted = T) # Genetic Data Only Trees.
 
 grp_average_clean <- data.frame(CD = setNames(grp_average$log_cd,gsub(" ", "_", grp_average$species)),
                                 TL = setNames(grp_average$log_tl,gsub(" ", "_", grp_average$species)),
                                 species = gsub(" ", "_", grp_average$species))
 
+# layout(matrix(c(1:2),nrow = 2),respect = T)
+
 # Drop tips.
-lamn_tree <- geiger::treedata(phy = mcc_sgTree,data = grp_average_clean, warnings = FALSE)$phy
-lamn_tree |> 
-  plot(); axisPhylo(1) 
+lamn_tree <- treedata(phy = mcc_tree,data = grp_average_clean, warnings = FALSE)$phy
+plotTree(ladderize(lamn_tree))
+
+# Alternative lamniform MCC topology.
+modified_tree <- readNexus(file = "phylogeny/mccTree_alopias.nex") # Make Alopias monophyletic.
+# Drop-tips.
+modified_lamn <- treedata(phy = modified_tree,data = grp_average_clean, warnings = FALSE)$phy
+
+# Calculates distances to the root
+# adephylo::distRoot(modified_lamn) 
+
+# All tips should be 115.9955 Ma from the root to be ultrametric
+# A. superciliosus needs to reduce by 132.6635 - 115.9955 = 16.668
+modified_lamn$edge.length[6] <- 88.436256 - 16.668
+
+plotTree(ladderize(modified_lamn)) # re-check tree
+distRoot(modified_lamn) # re-calculates distances to the root, should all be equal
 
 # PGLS (via RRPP).
 grp_pgls <- rrpp.data.frame(CD = setNames(grp_average_clean$CD,gsub(" ", "_", grp_average_clean$species)),
@@ -1958,12 +1978,19 @@ grp_pgls <- rrpp.data.frame(CD = setNames(grp_average_clean$CD,gsub(" ", "_", gr
                             species = gsub(" ", "_", grp_average_clean$species),
                             ecology = c(rep("macrophagous",5),rep("filter-feeding",1),rep("macrophagous",4)))
 
-grp_pgls$Cov <- vcv.phylo(lamn_tree)
+grp_pgls$CovA <- vcv.phylo(lamn_tree)
+grp_pgls$CovB <- vcv.phylo(modified_lamn) # Modified.
 
-pgls_shark <- lm.rrpp(f1 = TL ~ CD,data = grp_pgls, Cov = grp_pgls$Cov,  print.progress = FALSE)
+# Fit model for the first topology.
+pgls_shark <- lm.rrpp(f1 = TL ~ CD,data = grp_pgls, Cov = grp_pgls$CovA,  print.progress = FALSE)
+anova(pgls_shark)
+
 nonPhylo_shark <- lm.rrpp(f1 = TL ~ CD,data = grp_pgls,  print.progress = FALSE)
 
-# model.comparison(pgls_shark,nonPhylo_shark,type = "logLik")
+model.comparison(pgls_shark,nonPhylo_shark,type = "logLik") # PGLS is better.
+
+# Fit model for the second topology.
+pgls_shark_02 <- lm.rrpp(f1 = TL ~ CD,data = grp_pgls, Cov = grp_pgls$CovB,  print.progress = FALSE)
 
 # Generalized Least-Squares (via OLS projection)
 # tree_ggplot <- 
@@ -1981,10 +2008,10 @@ pgls_plot <-
                   size = 4,
                   box.padding = unit(0.35, "lines"),
                   point.padding = unit(0.3, "lines")) +
-  labs(
-       y = "Average total length (log10)",
+  labs(y = "Average total length (log10)",
        x = "Average centrum diameter (log10)") +
   annotation_logticks() +
+  geom_abline(intercept = coef(pgls_shark_02)[1], slope = coef(pgls_shark_02)[2], color = "#175E54", linetype = 2) +
   geom_abline(intercept = coef(pgls_shark)[1], slope = coef(pgls_shark)[2], color = "#B2182B") +
   geom_abline(intercept = coef(nonPhylo_shark)[1], slope = coef(nonPhylo_shark)[2], color = "blue") +
   theme_bw() +
@@ -2069,7 +2096,7 @@ bzR <- data.frame(min = setNames(size_trait$min, size_trait$species),
                   species = size_trait$species)
 
 # Complete lamniform tree.
-lamniformTree <- geiger::treedata(phy = mcc_sgTree,data = bzR, warnings = FALSE)$phy # 14 lamnifom taxa
+# lamniformTree <- geiger::treedata(phy = mcc_sgTree,data = bzR, warnings = FALSE)$phy # 14 lamnifom taxa
 
 xe <- c(setNames(size_trait$min, size_trait$species),
         setNames(size_trait$max, size_trait$species)
@@ -2078,13 +2105,13 @@ xe <- c(setNames(size_trait$min, size_trait$species),
 xt <- xe[order(names(xe))][-c(25:26)] # Remove Odontaspis_ferox (Missing from tree)
 
 # Plot.
-par(mfrow=c(1,2))
-plotTree(lamniformTree,mar=c(5.1,1.1,2.1,0.1)); axisPhylo(1) 
-par(mar=c(5.1,0.1,2.1,1.1))
-boxplot(xt~factor(names(xt),levels=lamniformTree$tip.label),horizontal=TRUE,xlab = "Body size (cm)",
-    axes=F,xlim=c(1,Ntip(lamniformTree)))
-
-axis(1)
+# par(mfrow=c(1,2))
+# plotTree(lamniformTree,mar=c(5.1,1.1,2.1,0.1)); axisPhylo(1) 
+# par(mar=c(5.1,0.1,2.1,1.1))
+# boxplot(xt~factor(names(xt),levels=lamniformTree$tip.label),horizontal=TRUE,xlab = "Body size (cm)",
+#     axes=F,xlim=c(1,Ntip(lamniformTree)))
+# 
+# axis(1)
 ```
 
 ## GWS vertebrae counts
@@ -2151,6 +2178,18 @@ tidy(pos_model,conf.int = TRUE) |>
   knitr::kable(caption = "GLM results") |>
   kable_styling(bootstrap_options = "striped",full_width = F)
 
+nS <- natanson_supplementary |> 
+  group_by(Specimen) |> 
+  summarise(n_ver = max(Column),
+            max_d = log10(max(`Dorsal.Diameter.(mm)`)),
+            max_t = log10(max(`Thickness.(mm)`)),
+            fl_cm = log10(max(`FL.(cm)`))) |> 
+  as.data.frame() |> 
+  column_to_rownames(var = "Specimen")
+
+pos_model_all <- glm(n_ver ~ fl_cm + max_d + max_t, family = "poisson",data = bind_rows(gws_natanson_log,nS))
+summary(pos_model_all)
+
 # Correlation test.
 
 # cor(gws_natanson$n_ver,gws_natanson$max_d,method = "spearman")
@@ -2187,6 +2226,7 @@ stem_species <-
   add_row(fit = 592.5426, lwr = 493.8996, upr = 710.8868,specimen = "NTM P 922-32", CD = 12.6) |> 
   # Order by age
   mutate(specimen = factor(specimen, levels = c("NTM P 922-32","OMNH 68860","KUVP 16343","WAM 96.4.45.108",
+                                                "MMSP CPC 3063","MMSP CPC 3068",
                                                 "IGVR 91032","MPPSA-IGVR 36371","FHSM VP-2187","MSNPV 20407–20417",
                                                 "LACM 128126","USNM 425665","LACM 135929","LACM 143537",
                                                 "LACM 120090","SDSM 34975","SDSM 47682","SDSM 47683"))) |> 

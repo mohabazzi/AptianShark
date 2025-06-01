@@ -6,6 +6,7 @@ COPY AptianShark.qmd /app/AptianShark.qmd
 COPY "data/*" /app/data/
 COPY references.bib /app/references.bib
 COPY ./phylogeny/500treePLtrees.nex /app/phylogeny/500treePLtrees.nex
+COPY ./phylogeny/mccTree_alopias.nex /app/phylogeny/mccTree_alopias.nex
 COPY ./_extensions/stanford-quarto /app/_extensions/stanford-quarto
 COPY ./_extensions/shafayetShafee /app/_extensions/shafayetShafee
 
@@ -72,6 +73,7 @@ RUN R -e "install.packages(c(\
     'rempsyc', \
     'phytools', \
     'ape', \
+    'adephylo', \
     'MASS', \
     'piggyback', \
     'MuMIn'), repos = 'https://cloud.r-project.org/')" \
