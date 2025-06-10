@@ -1,13 +1,13 @@
 
 <!-- README.md is generated from README.Rmd. -->
 
-# Early gigantic lamniform marks onset of mega-body size in modern shark evolution
+# Early gigantic lamniform marks the onset of large-body size in modern shark evolution
 
 <!-- badges: start -->
 <!-- badges: end -->
 
 This GitHub repository contains the code used to analyse all
-datasets presented in **Early gigantic lamniform marks onset of mega-body size in modern shark evolution**
+datasets presented in **Early gigantic lamniform marks the onset of large-body size in modern shark evolution**
 
 by Mohamad Bazzi, Mikael Siversson, Sabine Wintner, Michael Newbrey, Jonathan L. Payne, Nicolás E. Campione, Aubrey J. Roberts, Lisa J. Natanson, Stephen Hall, and Benjamin P. Kear
 

@@ -1,5 +1,5 @@
 ---
-title: "Early gigantic lamniform marks onset of mega-body size in modern shark evolution"
+title: "Early gigantic lamniform marks the onset of large-body size in modern shark evolution"
 title-block-banner: "#2E2D29"
 title-block-banner-color: "#FFFFFF"
 subtitle: "Supplementary Data:"
@@ -11,6 +11,7 @@ sansfont: Georgia
 footnotes-hover: true
 reference-location: margin
 lang: en
+search: true
 number-sections: false
 crossref:
   chapters: true
@@ -45,6 +46,21 @@ bibliography: references.bib
 editor_options: 
   chunk_output_type: console
 ---
+
+```{css}
+.sidebar nav {
+  position: sticky;
+  top: 80px;
+}
+```
+
+## Article summary
+
+::: {.callout-summary}
+
+Lamniform sharks include some of the largest-bodied organisms on Earth and trace their origin back ~135 million years. A growing, although exiguous archive of fossilized remains from the nascent stages of lamniform shark evolution indicates that large body sizes evolved long before lamniform species replaced marine tetrapods as top predators during the early half of the Late Cretaceous. The evolution of large body size in sharks has been linked with both physiological and environmental adaptations, in particular endothermy, and the ecological expansion into oceanic waters. Here, we report the oldest known giant lamniform shark, diagnosed from isolated vertebral centra and discovered in a ~115-million-year-old inner-neritic deposit (Aptian, Early Cretaceous) from Darwin, Northern Territory, Australia. Using a comprehensive dataset of living lamniform sharks comprising 1,912 individuals, we built and fitted both intra-and interspecific regression models based on the relationship between vertebral centrum diameter and total length. These models were applied to predict the body size of this new giant shark alongside other Cretaceous lamniform species known from vertebral elements. Our main results demonstrate that giant body sizes (≥ 6 meters) in lamniform sharks have an ancient origin, with our new fossil discovery supporting a neritic hypothesis for the evolutionary emergence of such phenotypic trait. Furthermore, notwithstanding the challenge in reconstructing the trophic ecology of extinct species, our new size estimates underscore a continuity and diversity of large body sizes throughout lamniform evolutionary history.
+
+:::
 
 ## Libraries
 
@@ -1202,7 +1218,7 @@ dist_species <-
 ```{r message=FALSE, warning=FALSE}
 # Homogeneity of slopes test (additive model).
 common_slope <- lm.rrpp(log_tl ~ log_cd + species, SS.type = "III",RRPP = T,iter = 999,data = lamniformes_data)
-# Heterogeneity of slopes test (iteraction model)
+# Heterogeneity of slopes test (interaction model)
 unqiue_slope <- lm.rrpp(log_tl ~ log_cd * species, SS.type = "III",RRPP = T,iter = 999,data = lamniformes_data)
 
 # summary(common_slope)$table # null
@@ -2116,6 +2132,8 @@ xt <- xe[order(names(xe))][-c(25:26)] # Remove Odontaspis_ferox (Missing from tr
 
 ## GWS vertebrae counts
 
+Make sure you note the number of verts was only the total amount we sampled, they had more verts but we stopped sampling around the caudal peduncle. You might want to make sure that is clear.
+
 $$Y_i \sim \text{Poisson}(\lambda_i)$$
 
 ```{r warning=FALSE}
@@ -2158,13 +2176,15 @@ gws_long_format |>
         plot.subtitle = element_text(size = 10),
         aspect.ratio = 1)
 
-# Four specimens with size, vertebrae count, and centrum diameter.
+# Four white shark individuals with size, vertebrae count, and centrum diameter.
 gws_natanson <-
   data.frame(n_ver = lapply(natanson_data, nrow)[3:6] |> unlist(),
              max_d = lapply(natanson_data, function(x) max(x[[2]],na.rm = T))[3:6] |> unlist()/10,
              max_t = lapply(natanson_data, function(x) max(x[[3]],na.rm = T))[3:6] |> unlist()/10,
              fl_cm = lapply(natanson_data, function(df) df[[4]][1])[3:6] |> unlist(),
              sex = c("Male","Male","Male","Male"))
+
+gws_natanson <- gws_natanson |> select(-5)
 
 gws_natanson_log <- 
   cbind(gws_natanson[,1],apply(gws_natanson[,2:4],2,log10)) |>
@@ -2173,29 +2193,45 @@ gws_natanson_log <-
 
 # Poisson model.
 pos_model <- glm(n_ver ~ fl_cm + max_d + max_t, family = "poisson",data = gws_natanson_log)
+summary(pos_model)
 
 tidy(pos_model,conf.int = TRUE) |> 
   knitr::kable(caption = "GLM results") |>
   kable_styling(bootstrap_options = "striped",full_width = F)
 
-nS <- natanson_supplementary |> 
+nS <- 
+  natanson_supplementary |>
+  mutate(across(4:6, ~ . /10)) |> # Convert to cm.
   group_by(Specimen) |> 
   summarise(n_ver = max(Column),
-            max_d = log10(max(`Dorsal.Diameter.(mm)`)),
-            max_t = log10(max(`Thickness.(mm)`)),
-            fl_cm = log10(max(`FL.(cm)`))) |> 
+            max_d = max(`Dorsal.Diameter.(mm)`),
+            max_t = max(`Thickness.(mm)`),
+            fl_cm = max(`FL.(cm)`)) |> 
   as.data.frame() |> 
   column_to_rownames(var = "Specimen")
 
-pos_model_all <- glm(n_ver ~ fl_cm + max_d + max_t, family = "poisson",data = bind_rows(gws_natanson_log,nS))
+nST <- 
+  bind_rows(gws_natanson_log,nS |> mutate(across(2:4, ~ log10(.x)))) |> 
+  mutate(Species = c(rep("White shark",4),
+                     rep("Common Thresher",2),
+                     rep("Shortfin Mako",3),
+                     rep("Porbeagle",3))
+         )
+
+pos_model_all <- glm(n_ver ~ fl_cm + max_d + max_t, family = "poisson",data = nST)
 summary(pos_model_all)
 
 # Correlation test.
+cor(gws_natanson$n_ver,gws_natanson$max_d,method = "spearman")
+cor(gws_natanson$n_ver,gws_natanson$fl_cm,method = "spearman")
+cor(gws_natanson$max_d,gws_natanson$fl_cm,method = "spearman")
+cor(gws_natanson$max_t,gws_natanson$fl_cm,method = "spearman")
 
-# cor(gws_natanson$n_ver,gws_natanson$max_d,method = "spearman")
-# cor(gws_natanson$n_ver,gws_natanson$fl_cm,method = "spearman")
-# cor(gws_natanson$max_d,gws_natanson$fl_cm,method = "spearman")
-# cor(gws_natanson$max_t,gws_natanson$fl_cm,method = "spearman")
+# All species,
+cor(bind_rows(nS,gws_natanson)$n_ver,bind_rows(nS,gws_natanson)$max_d,method = "spearman")
+cor(bind_rows(nS,gws_natanson)$n_ver,bind_rows(nS,gws_natanson)$fl_cm,method = "spearman")
+cor(bind_rows(nS,gws_natanson)$max_d,bind_rows(nS,gws_natanson)$fl_cm,method = "spearman")
+cor(bind_rows(nS,gws_natanson)$max_t,bind_rows(nS,gws_natanson)$fl_cm,method = "spearman")
 ```
 
 ## Re-estimating extinct species
@@ -2236,6 +2272,47 @@ stem_species <-
   geom_point(size = 3, shape = 19,colour = "black") +
   # Original points.
   geom_point(data = mesozoic_data,aes(x = label, y = total_length/10), size = 3, shape = 19, colour = "#B83A4B") +
+  # CD label.
+  #geom_text(aes(x = specimen, y = fit + 200, label = paste0("CD=",as.character(CD),"cm")),size = 6, col = "black") +
+  geom_rect(xmin = 0.7, xmax = 1.3, ymin = 450, ymax = 750,lty = 2,alpha = 0, color = "black") +
+  # ‘small,’ 1‒200 cm; ‘medium,’ 201‒400 cm; ‘large,’ 401‒600 cm; and ‘gigantic,’ >600 cm). 
+  geom_hline(yintercept = c(201,400,600), lty = c(2,2,1), col = "#08306b") +
+  theme_bw() +
+  labs(x = NULL, y = "Estimated total length (cm)",title = NULL) +
+  theme(title = element_text(face = "bold"),
+        axis.title = element_text(face = "bold",size = 10),
+        axis.text = element_text(size = 8),
+        axis.text.x = element_text(hjust = 1,vjust = 1,angle = 45),
+        axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
+        legend.title = element_text(face = "bold"),
+        plot.title = element_text(face = "bold",size = 12),
+        aspect.ratio = 1/2)
+
+# Exclude Anacoracids.
+10^predict(object = interSM3,newdata = stem_species,interval = "prediction") |> 
+  data.frame() |> 
+  add_column("specimen" = mesozoic_data$label) |> 
+  mutate(CD= mesozoic_data$centrum_diameter/10) |> 
+  add_row(fit = 592.5426, lwr = 493.8996, upr = 710.8868,specimen = "NTM P 922-32", CD = 12.6) |>
+  as_tibble() |> 
+  # Anacoracidae
+  filter(!specimen %in% c("USNM 425665","LACM 135929","LACM 143537", "LACM 120090", "SDSM 34975", "SDSM 47682", "SDSM 47683")) |> 
+  # Order by Age,
+  mutate(specimen = factor(specimen, levels = c("NTM P 922-32",
+                                                "OMNH 68860",
+                                                "KUVP 16343",
+                                                "WAM 96.4.45.108",
+                                                "IGVR 91032", 
+                                                "MPPSA-IGVR 36371", 
+                                                "FHSM VP-2187", 
+                                                "MSNPV 20407–20417", 
+                                                "LACM 128126"))) |> 
+  ggplot(aes(x = specimen, y = fit)) +
+  geom_errorbar(aes(ymin = lwr, ymax = upr),
+                width = 0.1,linewidth = 1.3) +
+  geom_point(size = 3, shape = 19,colour = "black") +
+  # Original points.
+  geom_point(data = mesozoic_data |> filter(family != "Anacoracidae"),aes(x = label, y = total_length/10), size = 3, shape = 19, colour = "#B83A4B") +
   # CD label.
   #geom_text(aes(x = specimen, y = fit + 200, label = paste0("CD=",as.character(CD),"cm")),size = 6, col = "black") +
   geom_rect(xmin = 0.7, xmax = 1.3, ymin = 450, ymax = 750,lty = 2,alpha = 0, color = "black") +
@@ -2363,46 +2440,9 @@ bzEe <- shimada |>
         axis.title = element_text(face = "bold"))
 ```
 
-## Ecology classification
+## Statement on data use
 
-```{r message=FALSE,warning=FALSE}
-macro_ecology <- 
-  lamniformes_data |> 
-  mutate(ecology = case_when(species == "Cetorhinus maximus" ~ "Microphagous", T ~ "Macrophagous")) |> 
-  mutate(ecology = as.factor(ecology)) |> 
-  mutate(lamellae_type = case_when(species == "Cetorhinus maximus" ~ "Thick concentric lamellae", T ~ "Thin concentric lamellae")) |> 
-  mutate(lamellae_type = as.factor(lamellae_type)) |> 
-  select(log_cd,log_tl,ecology,lamellae_type)
-
-# Predict (use Lamnidae Tl estimates)
-fossil_dataset <- data.frame(log_tl = log10(IS.IIII$fit), log_cd = aptian_shark$log_cd,lamellae_type = "Thin concentric lamellae")
-fossil_dataset$lamellae_type <- factor(fossil_dataset$lamellae_type, levels = levels(macro_ecology$lamellae_type))
-
-rf_model <- randomForest(
-  ecology ~ log_cd + log_tl + lamellae_type,
-  data = macro_ecology,
-  ntree = 1000,
-  mtry = 2,
-  importance = TRUE
-)
-
-predict(rf_model, newdata = fossil_dataset,type = "prob") |> 
-  as.data.frame() |> 
-  mutate(specimen = c("NTM P 922-33","NTM P 922-32","NTM P 9382", "NTM P 922-37","NTM P 922-29")) |> 
-  tidyr::pivot_longer(cols = c("Macrophagous","Microphagous"),names_to = "Ecology",values_to = "Predictions") |> 
-  ggplot(mapping = aes(x = "", y = Predictions, fill = Ecology)) +
-  geom_bar(stat = "identity",position = "fill") +
-  labs(x = "%", y = NULL) +
-  scale_fill_manual(values = c("#2D716F","#2E2D29")) +
-  geom_text(aes(label = paste0(round(Predictions*100), "%")),
-            position = position_stack(vjust = 0.5), size = 3,color = "white") +
-  facet_wrap(~ specimen, ncol = 5)+
-  theme_void() +
-  theme(strip.text = element_text(size = 8),
-        plot.title = element_text(face = "bold"),
-        aspect.ratio = 2,
-        legend.position = "bottom")
-```
+The data used in this study was compiled from multiple sources and future use, whether in part or whole, should cite and credit the original work.
 
 ## Download data
 
