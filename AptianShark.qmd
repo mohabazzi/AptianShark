@@ -65,9 +65,9 @@ Lamniform sharks include some of the largest-bodied organisms on Earth and trace
 ## Libraries
 
 ```{r message=FALSE,results='hide',warning=FALSE}
-R.packages <- c("ozmaps ggpubr ggspatial dplyr openxlsx ggplot2 tidyr reshape janitor downlit
-                 purrr readxl kableExtra knitr gtsummary gt MASS broom emmeans geomorph xml2
-                 smatr MASSTIMATE ggpmisc ggrepel smatr performance flextable Metrics
+R.packages <- c("oz ozmaps ggpubr ggspatial dplyr openxlsx ggplot2 tidyr reshape janitor downlit sf see
+                 purrr readxl kableExtra knitr gtsummary gt MASS broom emmeans geomorph xml2 broom.helpers
+                 smatr MASSTIMATE ggpmisc ggrepel smatr performance flextable Metrics magick
                  rempsyc car forcats RRPP caper geiger phangorn lmtest randomForest
                  MuMIn phytools conflicted tibble irr nlme ggdist adephylo")
 
@@ -206,21 +206,21 @@ AU <- ozmaps::ozmap("states")
 ```
 
 ```{r warning=FALSE, message=FALSE,fig.cap="Geographic map of Casuarina Beach, Darwin, Northern Territory, Australia. The fossil locality is indicated by a red rectangle. The maps were generated programmatically using the ozmap and ggplot2 packages."}
-AuMap <- 
+AuMap <-
   ggplot(data = AU) +
-  geom_sf(fill= "antiquewhite") +
+  geom_sf(fill= "antiquewhite") +#
   annotate(geom = "rect",xmin = 130.5, xmax = 131.2, ymin = -12.7, ymax = -12.2, color = "#E16A86", fill = NA, lwd = .8) +
-  xlab("Longitude") + 
+  xlab("Longitude") +
   ylab("Latitude") +
-  theme_bw() + 
-  theme(panel.grid.major = element_line(color = gray(.5), linetype = "dashed", linewidth = 0.5), 
+  theme_bw() +
+  theme(panel.grid.major = element_line(color = gray(.5), linetype = "dashed", linewidth = 0.5),
         panel.background = element_rect(fill = "aliceblue"))
 
 # Casuarina Beach, Darwin, Northern Territory.
 ggarrange(AuMap,
-          AU |> 
-  filter(NAME == "Northern Territory") |> 
-  ggplot(aes(fill = NAME)) + 
+          AU |>
+  filter(NAME == "Northern Territory") |>
+  ggplot(aes(fill = NAME)) +
   geom_sf(fill = "antiquewhite",show.legend = F) +
   labs(x= "Longitude", y = "Latitude") +
   # Darwin.
@@ -229,9 +229,9 @@ ggarrange(AuMap,
   geom_point(aes(x = 130.873794555, y = -12.352499961), color = "black", size = 3,show.legend = F) +
   geom_label(aes(x = 132, y = -13, label = "Casuarina Beach, Darwin"),color = "black", fontface = 2, fill = NA) +
   annotation_scale(location = "bl", width_hint = 0.5) +
-  annotation_north_arrow(location = "bl", which_north = "true", pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"), 
+  annotation_north_arrow(location = "bl", which_north = "true", pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"),
                          style = north_arrow_fancy_orienteering) +
-  theme_bw() + 
+  theme_bw() +
   theme(plot.title = element_text(face = "bold"),
         panel.grid.major = element_line(color = gray(.5), linetype = "dashed", linewidth = 0.5),
         panel.background = element_rect(fill = "aliceblue")))
