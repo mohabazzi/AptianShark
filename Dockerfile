@@ -1,7 +1,6 @@
-# Use the Rocker image with Ubuntu base
-FROM rocker/r-ver:4.5.0
+FROM rocker/geospatial:4.3.1
 
-# Copy the .qmd and related files. 
+# Copy project files
 COPY AptianShark.qmd /app/AptianShark.qmd
 COPY data/* /app/data/
 COPY references.bib /app/references.bib
@@ -10,54 +9,74 @@ COPY phylogeny/mccTree_alopias.nex /app/phylogeny/mccTree_alopias.nex
 COPY _extensions/stanford-quarto /app/_extensions/stanford-quarto
 COPY _extensions/shafayetShafee /app/_extensions/shafayetShafee
 
-RUN apt-get update && apt-get install -y \
-    gdal-bin \
-    libgdal-dev \
-    libproj-dev \
-    libgeos-dev \
-    libudunits2-dev \
-    libfontconfig1-dev \
-    libfreetype6-dev \
-    libharfbuzz-dev \
-    libfribidi-dev \
-    libpng-dev \
-    libtiff5-dev \
-    libjpeg-dev \
-    libcurl4-openssl-dev \
-    libssl-dev \
-    libxml2-dev \
-    libmagick++-dev \
-    liblapack-dev \
-    libblas-dev \
-    libx11-dev \
-    libzip-dev \
-    libfftw3-dev \
-    libxt-dev \
-    wget && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Install Quarto CLI.
-RUN wget https://github.com/quarto-dev/quarto-cli/releases/download/v1.7.13/quarto-1.7.13-linux-amd64.deb \
+# Install Quarto CLI
+RUN apt-get update -y && apt-get install -y wget \
+    && wget https://github.com/quarto-dev/quarto-cli/releases/download/v1.7.13/quarto-1.7.13-linux-amd64.deb \
     && dpkg -i quarto-1.7.13-linux-amd64.deb \
     && rm quarto-1.7.13-linux-amd64.deb
 
-# Step 1: Install sf first — it has system dependencies
-RUN R -e "install.packages('sf', repos = 'https://cloud.r-project.org')"
+# Install r-cran-* binary packages
+RUN apt-get install -y --no-install-recommends \
+    r-cran-tidyverse
 
-# Step 2: Install ozmaps separately (after sf is ready)
-RUN R -e "install.packages('ozmaps', repos = 'https://cloud.r-project.org')"
+RUN rm -rf /var/lib/apt/lists/* && \
+    apt-get update && \
+    apt-get clean
 
-# Step 3: Install everything else (in one go)
-RUN R -e "install.packages(c( \
-  'oz', 'ggpubr','quarto', 'ggspatial', 'dplyr', 'openxlsx', 'ggplot2', 'tidyr', 'reshape', 'janitor', \
-  'downlit', 'see', 'purrr', 'readxl', 'kableExtra', 'knitr', 'gtsummary', 'gt', 'MASS', 'broom', \
-  'emmeans', 'geomorph', 'xml2', 'broom.helpers', 'smatr', 'MASSTIMATE', 'ggpmisc', 'ggrepel', \
-  'performance', 'flextable', 'Metrics', 'magick', 'rempsyc', 'car', 'forcats', 'RRPP', 'caper', \
-  'geiger', 'phangorn', 'lmtest', 'randomForest', 'MuMIn', 'phytools', 'conflicted', 'tibble', \
-  'irr', 'nlme', 'ggdist', 'adephylo'), repos = 'https://cloud.r-project.org')"
+# Install R packages from source
+RUN R -e "install.packages(c(\
+    'ozmaps', \
+    'ggspatial', \
+    'dplyr', \
+    'openxlsx', \
+    'ggplot2', \
+    'tidyr', \
+    'reshape', \
+    'janitor', \
+    'downlit', \
+    'sf', \
+    'see', \
+    'purrr', \
+    'readxl', \
+    'kableExtra', \
+    'knitr', \
+    'gtsummary', \
+    'gt', \
+    'MASS', \
+    'broom', \
+    'emmeans', \
+    'geomorph', \
+    'xml2', \
+    'broom.helpers', \
+    'smatr', \
+    'MASSTIMATE', \
+    'ggpmisc', \
+    'ggrepel', \
+    'smatr', \
+    'performance', \
+    'flextable', \
+    'Metrics', \
+    'magick', \
+    'rempsyc', \
+    'car', \
+    'forcats', \
+    'RRPP', \
+    'caper', \
+    'geiger', \
+    'phangorn', \
+    'lmtest', \
+    'MuMIn', \
+    'phytools', \
+    'conflicted', \
+    'tibble', \
+    'irr', \
+    'nlme', \
+    'ggdist', \
+    'adephylo'))"
 
-# Clean up apt caches
-RUN apt-get clean
+RUN R -e "install.packages('quarto', repos = 'https://cloud.r-project.org')"
+RUN R -e "install.packages('ggpubr', repos = 'https://cloud.r-project.org')"
+RUN R -e "install.packages('patchwork', repos = 'https://cloud.r-project.org')"
 
 # Set working directory
 WORKDIR /app

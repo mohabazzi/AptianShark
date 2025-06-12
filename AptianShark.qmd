@@ -65,11 +65,11 @@ Lamniform sharks include some of the largest-bodied organisms on Earth and trace
 ## Libraries
 
 ```{r message=FALSE,results='hide',warning=FALSE}
-R.packages <- c("oz ozmaps ggpubr ggspatial dplyr openxlsx ggplot2 tidyr reshape janitor downlit sf see
+R.packages <- c("ozmaps ggspatial dplyr openxlsx ggplot2 tidyr reshape janitor downlit sf see
                  purrr readxl kableExtra knitr gtsummary gt MASS broom emmeans geomorph xml2 broom.helpers
                  smatr MASSTIMATE ggpmisc ggrepel smatr performance flextable Metrics magick
-                 rempsyc car forcats RRPP caper geiger phangorn lmtest randomForest
-                 MuMIn phytools conflicted tibble irr nlme ggdist adephylo")
+                 rempsyc car forcats RRPP caper geiger phangorn lmtest
+                 MuMIn phytools conflicted tibble irr nlme ggdist adephylo ggpubr patchwork")
 
 import_packages <- 
   function(x)
@@ -1900,7 +1900,7 @@ meso_01 <-
         axis.text.y = element_text(angle = 90,hjust = 0.5,vjust = 0.5),
         legend.title = element_text(face = "bold"),
         legend.position = "none",
-        aspect.ratio = 1)
+        aspect.ratio = 1.5)
 
 # Fit linear model.
 stem_fit_01 <- lm(log_tl ~ log_cd, data = mesozoic_data_subset)
@@ -1946,7 +1946,7 @@ meso_02 <- stem_all_predictions |>
         axis.text = element_text(size = 8),
         axis.title.x = element_text(vjust = -3),
         plot.caption = element_text(hjust = 0),
-        aspect.ratio = 1)
+        aspect.ratio = 1.5)
   # facet_wrap(~factor(specimen,c("NTM P922-32","NTM P922-29",
   #                               "NTM P 922-37","NTM P 922-33")),scales = "free_y",ncol = 2)
 
@@ -2003,7 +2003,7 @@ anova(pgls_shark)
 
 nonPhylo_shark <- lm.rrpp(f1 = TL ~ CD,data = grp_pgls,  print.progress = FALSE)
 
-model.comparison(pgls_shark,nonPhylo_shark,type = "logLik") # PGLS is better.
+# model.comparison(pgls_shark,nonPhylo_shark,type = "logLik") # PGLS is better.
 
 # Fit model for the second topology.
 pgls_shark_02 <- lm.rrpp(f1 = TL ~ CD,data = grp_pgls, Cov = grp_pgls$CovB,  print.progress = FALSE)
