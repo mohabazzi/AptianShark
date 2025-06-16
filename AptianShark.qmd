@@ -38,14 +38,13 @@ other-links:
   - text: Docker image
     icon: file-code
     href: https://hub.docker.com/r/mohamadbazzi/aptian-image
+  - text: Morphosource
+    icon: file-code
+    href: https://www.morphosource.org/concern/media/000752102?locale=en
 code-links:
   - text: Github Repo
     icon: github
     href: https://github.com/mohabazzi/AptianShark
-code-links:
-  - text: Morphosource
-    icon: file-code
-    href: https://www.morphosource.org/concern/media/000752102?locale=en
 bibliography: references.bib
 editor_options: 
   chunk_output_type: console
